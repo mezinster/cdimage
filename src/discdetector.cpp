@@ -5,7 +5,7 @@ DiscDetector::DiscDetector(IDiscBackend* backend, ProfileDatabase* db, QObject* 
     : QObject(parent), m_backend(backend), m_db(db) {}
 
 void DiscDetector::detectAsync(const QString& devicePath) {
-    QtConcurrent::run([this, devicePath]() {
+    (void)QtConcurrent::run([this, devicePath]() {
         RawDiscInfo info;
         try {
             info = m_backend->queryDisc(devicePath);
