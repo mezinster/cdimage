@@ -1,0 +1,46 @@
+[
+  {
+    "discId": "",
+    "name": "Verbatim CD-RW Hi-Speed 8x-10x 700 MB SERL 1",
+    "mediaType": 1,
+    "tr0": 22951.52,
+    "dtr": 1.3865961,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "Verbatim CD-RW Hi-Speed 8x-10x 700 MB SERL 2",
+    "mediaType": 1,
+    "tr0": 22951.07,
+    "dtr": 1.3865958,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "eProformance CD-RW 4x-10x 700 MB Prodisk Technology Inc",
+    "mediaType": 1,
+    "tr0": 22936.085,
+    "dtr": 1.38314,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "TDK CD-RW 4x-12x HIGH SPEED 700MB 80MIN",
+    "mediaType": 1,
+    "tr0": 23000.145,
+    "dtr": 1.38659775,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  }
+]
