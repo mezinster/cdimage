@@ -18,23 +18,38 @@
 #define MAINWINDOW_H
 
 #include "ui_mainwindow.h"
-
 #include "cdpreview.h"
+#include "discprofile.h"
+#include "idiscbackend.h"
+#include "discdetector.h"
+#include "profiledatabase.h"
+#include <QScopedPointer>
 
-class MainWindow: public QMainWindow, public Ui::MainWindow
-{
+class MainWindow: public QMainWindow, public Ui::MainWindow {
 Q_OBJECT
 public:
-	MainWindow ( QWidget* parent=0 );
-public slots:
-    void loadImage(); //load pixmap from file
-    void createTrack(); //generate track
-    void about();
-private:
-	CDPreview centralView;
-	QImage m_image;
-    QString m_path;
-};
+    MainWindow(QWidget* parent = nullptr);
 
+public slots:
+    void loadImage();
+    void createTrack();
+    void about();
+    void detectDisc();
+
+private slots:
+    void onProfileFound(DiscProfile profile);
+    void onProfileNotFound(RawDiscInfo info);
+    void onDetectionFailed(QString error);
+
+private:
+    CDPreview                          centralView;
+    QImage                             m_image;
+    QString                            m_path;
+    DiscProfile                        m_currentProfile;
+    QString                            m_lastDetectedDevice;
+    QScopedPointer<IDiscBackend>       m_backend;
+    QScopedPointer<ProfileDatabase>    m_profileDb;
+    QScopedPointer<DiscDetector>       m_detector;
+};
 
 #endif

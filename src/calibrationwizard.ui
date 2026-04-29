@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ResultPageWidget</class>
+ <widget class="QWidget" name="ResultPageWidget">
+  <layout class="QFormLayout">
+   <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Profile name:</string></property></widget></item>
+   <item row="0" column="1"><widget class="QLineEdit" name="leProfileName"/></item>
+   <item row="1" column="0"><widget class="QLabel"><property name="text"><string>tr0:</string></property></widget></item>
+   <item row="1" column="1"><widget class="QLabel" name="lblTr0"/></item>
+   <item row="2" column="0"><widget class="QLabel"><property name="text"><string>dtr:</string></property></widget></item>
+   <item row="2" column="1"><widget class="QLabel" name="lblDtr"/></item>
+   <item row="3" column="0"><widget class="QLabel"><property name="text"><string>r0 (mm):</string></property></widget></item>
+   <item row="3" column="1"><widget class="QLabel" name="lblR0"/></item>
+   <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Media type:</string></property></widget></item>
+   <item row="4" column="1"><widget class="QLabel" name="lblMediaType"/></item>
+  </layout>
+ </widget>
+</ui>

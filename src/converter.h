@@ -25,6 +25,7 @@
 #include <QObject>
 #include <QImage>
 #include <QFile>
+#include "discprofile.h"
 
 #define D 4
 const int delays[24]=
@@ -45,6 +46,7 @@ Q_OBJECT
 public:
 	Converter(QObject *parent = 0);
 	Converter(QObject *parent = 0, double tr0 = 22951.52052, double dtr = 1.3865961805, double r0 = 24.5);
+	Converter(QObject *parent, const DiscProfile& profile);
 	~Converter();
 	double tr0(){return m_tr0;}
 	double dtr(){return m_dtr;}

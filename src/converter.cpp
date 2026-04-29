@@ -46,6 +46,17 @@ Converter::Converter(QObject *parent, double tr0, double dtr, double r0)
 #undef D
 }
 
+Converter::Converter(QObject *parent, const DiscProfile& profile)
+	:QObject(parent), m_tr0(profile.tr0), m_dtr(profile.dtr), m_r0(profile.r0),
+	 m_mixColors(profile.mixColors)
+{
+#define D 4
+	nh=28*D-1;
+	pinf=0;
+	c=0;
+#undef D
+}
+
 Converter::~Converter()
 {
 }
