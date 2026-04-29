@@ -42,5 +42,60 @@
     "layerCount": 1,
     "layerBreakSector": 0,
     "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "Verbatim CD-RW Colour SERL HiSpeed 8x-12x 700MB",
+    "mediaType": 1,
+    "tr0": 22951.26,
+    "dtr": 1.38659585,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "Verbatim CD-RW DataLifePlus SERL HiSpeed 8x-10x 700MB",
+    "mediaType": 1,
+    "tr0": 22958.498,
+    "dtr": 1.38655599,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "TDK CD-RW 80HSCB20 HiSpeed 700MB",
+    "mediaType": 1,
+    "tr0": 22913.5054882195,
+    "dtr": 1.38761396999654,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "Verbatim CD-RW 12x 700MB SERL #43480",
+    "mediaType": 1,
+    "tr0": 22951.25,
+    "dtr": 1.3865961,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
+  },
+  {
+    "discId": "",
+    "name": "Verbatim CD-R 700MB (multiple styles)",
+    "mediaType": 0,
+    "tr0": 23349.76,
+    "dtr": 1.389989,
+    "r0": 24.5,
+    "layerCount": 1,
+    "layerBreakSector": 0,
+    "mixColors": false
   }
 ]

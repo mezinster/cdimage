@@ -25,9 +25,53 @@ QImage TestPatternGenerator::generateGradientImage(int size) {
     return img;
 }
 
+QImage TestPatternGenerator::generateRingsImage(int size) {
+    QImage img(size, size, QImage::Format_RGB32);
+    img.fill(Qt::black);
+
+    const double cx       = size / 2.0;
+    const double cy       = size / 2.0;
+    // Outer data area = 58 mm; image half-width maps to that physical radius.
+    const double pxPerMm  = (size / 2.0) / 58.0;
+    // Ring radii from upstream solver: r0 + {4, 16, 32} mm (r0 = 24.5 mm).
+    const double rings_mm[3] = { 28.5, 40.5, 56.5 };
+    // Ring band half-width in pixels: ~4 px at 1200, ~10 px at 3000.
+    const double halfWidthPx  = std::max(3.0, size / 300.0);
+    // Notch: 20° gap centred at angle 0 (rightward from centre).
+    const double notchHalf = 10.0 * M_PI / 180.0;
+
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const double dx   = x - cx;
+            const double dy   = y - cy;
+            const double rpx  = std::sqrt(dx*dx + dy*dy);
+            const double rmm  = rpx / pxPerMm;
+            const double ang  = std::atan2(dy, dx);   // -π .. π
+
+            for (double rr : rings_mm) {
+                if (std::abs(rmm - rr) * pxPerMm < halfWidthPx) {
+                    if (std::abs(ang) > notchHalf)
+                        img.setPixel(x, y, qRgb(255, 255, 255));
+                    break;
+                }
+            }
+        }
+    }
+    return img;
+}
+
 QString TestPatternGenerator::generateTrack(const DiscProfile& profile,
                                              const QString& outputPath) {
     const QImage img = generateGradientImage(3000);
+    Converter conv(nullptr, profile);
+    if (conv.convert(img, outputPath))
+        return outputPath;
+    return {};
+}
+
+QString TestPatternGenerator::generateRingsTrack(const DiscProfile& profile,
+                                                   const QString& outputPath) {
+    const QImage img = generateRingsImage(3000);
     Converter conv(nullptr, profile);
     if (conv.convert(img, outputPath))
         return outputPath;
