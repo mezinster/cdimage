@@ -38,7 +38,8 @@ void TestPhotoCalibration::start_extracts_geometry_from_synthetic_photo() {
     syntheticPhoto.save(tmp.fileName());
 
     RawDiscInfo disc; disc.discId = "synth"; disc.mediaType = MediaType::CD_RW;
-    PhotoCalibration cal(tmp.fileName());
+    // Gradient image → use Gradient path to avoid ring detection on a non-rings image.
+    PhotoCalibration cal(tmp.fileName(), PhotoCalibration::PatternType::Gradient);
     QSignalSpy doneSpy(&cal, &PhotoCalibration::finished);
     QSignalSpy failSpy(&cal, &PhotoCalibration::failed);
 
@@ -51,4 +52,40 @@ void TestPhotoCalibration::start_extracts_geometry_from_synthetic_photo() {
     DiscProfile result = doneSpy[0][0].value<DiscProfile>();
     QVERIFY(result.r0 > 20.0 && result.r0 < 30.0);
     QVERIFY(result.dtr > 0.0);
+}
+
+void TestPhotoCalibration::findRingPhase_locates_notch_in_generated_image() {
+    // generateRingsImage places a 20° notch centred at angle 0 (rightward).
+    const QImage img = TestPatternGenerator::generateRingsImage(600);
+    const double cx      = 300.0;
+    const double cy      = 300.0;
+    const double pxPerMm = 300.0 / 58.0;
+    const double rs1_px  = (24.5 + 4.0) * pxPerMm;   // innermost ring
+
+    const double phase = PhotoCalibration::findRingPhase(img, cx, cy, rs1_px);
+
+    // Allow ±15° (half the notch width plus measurement tolerance).
+    const double tol = 15.0 * M_PI / 180.0;
+    const bool nearZero    = std::abs(phase)             < tol;
+    const bool nearTwoPi   = std::abs(phase - 2*M_PI)   < tol;
+    QVERIFY2(nearZero || nearTwoPi, "findRingPhase did not locate notch near angle 0");
+}
+
+void TestPhotoCalibration::solveRingsGeometry_identity_for_zero_offsets() {
+    // n1=n2=0 means no correction needed; solver should return the guess unchanged.
+    const double tr0 = 22951.26, dtr = 1.38659585;
+    const DiscProfile result =
+        PhotoCalibration::solveRingsGeometry(tr0, dtr, 24.5, 0.0, 0.0);
+    QVERIFY(std::abs(result.tr0 - tr0) < 1e-6);
+    QVERIFY(std::abs(result.dtr - dtr) < 1e-12);
+}
+
+void TestPhotoCalibration::solveRingsGeometry_modifies_params_for_nonzero_offsets() {
+    // Non-zero n1, n2 should cause the solver to adjust at least one parameter.
+    const double tr0 = 22951.26, dtr = 1.38659585;
+    const DiscProfile result =
+        PhotoCalibration::solveRingsGeometry(tr0, dtr, 24.5, 0.01, 0.005);
+    const bool tr0Changed = std::abs(result.tr0 - tr0) > 0.01;
+    const bool dtrChanged = std::abs(result.dtr - dtr) > 1e-7;
+    QVERIFY2(tr0Changed || dtrChanged, "Solver left parameters unchanged for non-zero n1/n2");
 }

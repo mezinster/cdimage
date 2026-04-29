@@ -81,7 +81,7 @@ void BurnPatternPage::doBurn() {
     const QString outPath = QDir::tempPath() + "/cdimage_testpattern.cdr";
 
     DiscProfile defaultProfile;
-    if (TestPatternGenerator::generateTrack(defaultProfile, outPath).isEmpty()) {
+    if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
         m_status->setText(tr("Failed to generate test track."));
         m_progress->setVisible(false);
         return;
@@ -187,7 +187,8 @@ void AnalysisPage::initializePage() {
     ICalibrationMethod* method = nullptr;
 
     if (usePhoto) {
-        method = new PhotoCalibration(field("photoPath").toString(), this);
+        method = new PhotoCalibration(field("photoPath").toString(),
+                                       PhotoCalibration::PatternType::Rings, this);
     } else {
         const QString dev = wizard()->property("devicePath").toString();
         method = new DriveReadbackCalibration(m_backend, dev, this);
