@@ -3,25 +3,45 @@
 ######################################################################
 
 TEMPLATE = app
-TARGET = cdimage
+TARGET   = cdimage
+QT      += widgets concurrent
 INCLUDEPATH += .
-QT += widgets
 
-# You can make your code fail to compile if you use deprecated APIs.
-# In order to do so, uncomment the following line.
-# Please consult the documentation of the deprecated API in order to know
-# how to port your code away from it.
-# You can also select to disable deprecated APIs only up to a certain version of Qt.
-#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
-
-# Input
 HEADERS += src/cdpreview.h \
            src/converter.h \
            src/createtrackdialog.h \
-           src/mainwindow.h
-FORMS += src/createtrackdialog.ui src/mainwindow.ui
+           src/mainwindow.h \
+           src/discprofile.h \
+           src/idiscbackend.h \
+           src/icalibrationmethod.h \
+           src/discdetector.h \
+           src/profiledatabase.h \
+           src/testpatterngenerator.h \
+           src/photocalibration.h \
+           src/drivereadbackcalibration.h \
+           src/calibrationwizard.h
+
 SOURCES += src/cdpreview.cpp \
            src/converter.cpp \
            src/createtrackdialog.cpp \
            src/main.cpp \
-           src/mainwindow.cpp
+           src/mainwindow.cpp \
+           src/discprofile.cpp \
+           src/discdetector.cpp \
+           src/profiledatabase.cpp \
+           src/testpatterngenerator.cpp \
+           src/photocalibration.cpp \
+           src/drivereadbackcalibration.cpp \
+           src/calibrationwizard.cpp
+
+unix:HEADERS  += src/linuxdiscbackend.h
+unix:SOURCES  += src/linuxdiscbackend.cpp
+
+win32:HEADERS += src/windowsdiscbackend.h
+win32:SOURCES += src/windowsdiscbackend.cpp
+
+FORMS += src/createtrackdialog.ui \
+         src/mainwindow.ui \
+         src/calibrationwizard.ui
+
+RESOURCES += resources/profiles.qrc
