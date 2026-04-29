@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <ntddscsi.h>
+#include <ntddcdrm.h>
 #include <cstring>
 #include <stdexcept>
 

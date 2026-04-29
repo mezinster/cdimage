@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QApplication>
 #include <QDir>
 
 static const QMap<MediaType, QString> kMediaNames = {
@@ -241,7 +242,7 @@ void ResultPage::initializePage() {
     m_lblR0->setText(QString::number(p.r0,  'f', 2));
     m_lblMediaType->setText(kMediaNames.value(p.mediaType, "Unknown"));
 
-    connect(wizard(), &QWizard::accepted, this, [this, p]() mutable {
+    connect(wizard(), &QWizard::accepted, this, [this, p = DiscProfile(p)]() mutable {
         p.name = m_leName->text();
         m_db->saveUserProfile(p);
     }, Qt::UniqueConnection);
