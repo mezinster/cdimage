@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QStandardPaths>
 
 ProfileDatabase::ProfileDatabase(const QString& userProfilePath, QObject* parent)

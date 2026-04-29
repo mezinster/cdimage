@@ -32,7 +32,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_path = QDir::currentPath();
 
     m_backend.reset(createDiscBackend());
-    m_profileDb.reset(new ProfileDatabase(this));
+    m_profileDb.reset(new ProfileDatabase(QString(), this));
     m_detector.reset(new DiscDetector(m_backend.data(), m_profileDb.data(), this));
 
     connect(actionLoad_image,   &QAction::triggered, this, &MainWindow::loadImage);

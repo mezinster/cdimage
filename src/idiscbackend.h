@@ -2,6 +2,7 @@
 #define IDISCBACKEND_H
 
 #include "discprofile.h"
+#include <QMetaType>
 #include <QStringList>
 #include <QVector>
 #include <stdexcept>
