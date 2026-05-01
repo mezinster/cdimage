@@ -48,10 +48,15 @@ void TestProfileDatabase::remove_user_profile() {
 }
 
 void TestProfileDatabase::save_returns_true_on_success() {
-    QTemporaryFile tmp; tmp.open();
+    QTemporaryFile tmp; tmp.open(); tmp.close();
     ProfileDatabase db(tmp.fileName());
     DiscProfile p; p.discId = "ok"; p.name = "OK";
     QVERIFY(db.saveUserProfile(p));
+
+    // Verify it actually hit disk by reading with a fresh instance.
+    ProfileDatabase db2(tmp.fileName());
+    QCOMPARE(db2.userProfiles().size(), 1);
+    QCOMPARE(db2.userProfiles().first().discId, QString("ok"));
 }
 
 void TestProfileDatabase::save_returns_false_when_path_unwritable() {
@@ -64,7 +69,7 @@ void TestProfileDatabase::save_returns_false_when_path_unwritable() {
 }
 
 void TestProfileDatabase::user_and_bundled_profiles_are_separable() {
-    QTemporaryFile tmp; tmp.open();
+    QTemporaryFile tmp; tmp.open(); tmp.close();
     ProfileDatabase db(tmp.fileName());
     const int bundledCount = db.bundledProfiles().size();
     QVERIFY(bundledCount >= 4);
@@ -74,4 +79,13 @@ void TestProfileDatabase::user_and_bundled_profiles_are_separable() {
     db.saveUserProfile(p);
     QCOMPARE(db.userProfiles().size(), 1);
     QCOMPARE(db.bundledProfiles().size(), bundledCount);
+}
+
+void TestProfileDatabase::failed_save_does_not_modify_user_list() {
+    ProfileDatabase db("/proc/cdimage_should_not_exist/profiles.json");
+    QCOMPARE(db.userProfiles().size(), 0);
+
+    DiscProfile p; p.discId = "x"; p.name = "X";
+    QVERIFY(!db.saveUserProfile(p));
+    QCOMPARE(db.userProfiles().size(), 0);  // rollback restored empty state
 }

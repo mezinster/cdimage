@@ -52,14 +52,24 @@ QList<DiscProfile> ProfileDatabase::allProfiles() const {
 }
 
 bool ProfileDatabase::saveUserProfile(const DiscProfile& profile) {
+    const QList<DiscProfile> snapshot = m_user;
     m_user.removeIf([&](const DiscProfile& p){ return p.discId == profile.discId; });
     m_user.append(profile);
-    return persist();
+    if (!persist()) {
+        m_user = snapshot;
+        return false;
+    }
+    return true;
 }
 
 bool ProfileDatabase::removeUserProfile(const QString& discId) {
+    const QList<DiscProfile> snapshot = m_user;
     m_user.removeIf([&](const DiscProfile& p){ return p.discId == discId; });
-    return persist();
+    if (!persist()) {
+        m_user = snapshot;
+        return false;
+    }
+    return true;
 }
 
 bool ProfileDatabase::persist() {
