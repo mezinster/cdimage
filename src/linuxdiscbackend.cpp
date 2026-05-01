@@ -99,14 +99,38 @@ RawDiscInfo LinuxDiscBackend::queryDisc(const QString& devicePath) {
     return info;
 }
 
-bool LinuxDiscBackend::burnTestPattern(const QString& devicePath,
-                                       const QString& trackFile) {
+BurnResult LinuxDiscBackend::burnTestPattern(const QString& devicePath,
+                                              const QString& trackFile) {
+    BurnResult r;
     QProcess proc;
+    proc.setProcessChannelMode(QProcess::MergedChannels);
     proc.start("cdrecord", {"-audio",
                             QString("dev=%1").arg(devicePath),
                             trackFile});
-    proc.waitForFinished(300000);
-    return proc.exitCode() == 0;
+    if (!proc.waitForStarted(5000)) {
+        r.errorMessage = QStringLiteral(
+            "Failed to start cdrecord: %1. Is it installed and in PATH?")
+            .arg(proc.errorString());
+        return r;
+    }
+    r.started = true;
+    if (!proc.waitForFinished(600000)) {
+        proc.kill();
+        proc.waitForFinished(2000);
+        r.stderrText   = QString::fromLocal8Bit(proc.readAll());
+        r.errorMessage = QStringLiteral("cdrecord did not finish within 10 minutes.");
+        return r;
+    }
+    r.stderrText = QString::fromLocal8Bit(proc.readAll());
+    if (proc.exitStatus() != QProcess::NormalExit) {
+        r.errorMessage = QStringLiteral("cdrecord crashed.");
+        return r;
+    }
+    r.finished = true;
+    r.exitCode = proc.exitCode();
+    if (r.exitCode != 0)
+        r.errorMessage = QStringLiteral("cdrecord exited with code %1").arg(r.exitCode);
+    return r;
 }
 
 QVector<qint64> LinuxDiscBackend::measureSeekTimes(const QString& devicePath,

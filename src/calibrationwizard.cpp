@@ -91,13 +91,16 @@ void BurnPatternPage::doBurn() {
     m_status->setText(tr("Burning test pattern to disc…"));
     qApp->processEvents();
 
-    if (m_backend->burnTestPattern(device, outPath)) {
+    const BurnResult burnResult = m_backend->burnTestPattern(device, outPath);
+    if (burnResult.succeeded()) {
         m_status->setText(tr("Test pattern burned. Remove the disc and proceed."));
         m_done = true;
         emit completeChanged();
     } else {
-        m_status->setText(tr("Burn failed. Check that cdrecord is installed and "
-                             "the device path is correct."));
+        const QString reason = burnResult.errorMessage.isEmpty()
+                               ? tr("cdrecord exited with code %1").arg(burnResult.exitCode)
+                               : burnResult.errorMessage;
+        m_status->setText(tr("Burn failed: %1").arg(reason));
     }
     m_progress->setVisible(false);
 }
