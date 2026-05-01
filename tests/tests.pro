@@ -9,7 +9,12 @@ HEADERS += test_discprofile.h \
            test_profiledatabase.h \
            test_discdetector.h \
            test_photocalibration.h \
-           mockdiscbackend.h
+           mockdiscbackend.h \
+           ../src/converter.h \
+           ../src/profiledatabase.h \
+           ../src/icalibrationmethod.h \
+           ../src/discdetector.h \
+           ../src/photocalibration.h
 
 SOURCES += main.cpp \
            test_discprofile.cpp \

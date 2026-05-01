@@ -9,5 +9,8 @@ private slots:
     void findById_finds_user_profile();
     void user_profile_overrides_bundled();
     void remove_user_profile();
+    void save_returns_true_on_success();
+    void save_returns_false_when_path_unwritable();
+    void user_and_bundled_profiles_are_separable();
 };
 #endif
