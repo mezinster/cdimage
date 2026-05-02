@@ -82,6 +82,32 @@ jobs:
           Copy-Item $offscreen $destPlatforms -Force
           Write-Host "Staged qoffscreen.dll into $destPlatforms"
 
+      - name: Inspect deployed test binary
+        working-directory: tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
+          Write-Host "----- Files in $($exe.Directory.FullName) -----"
+          Get-ChildItem $exe.Directory.FullName | Format-Table Name, Length, LastWriteTime
+          $platforms = Join-Path $exe.Directory.FullName 'platforms'
+          if (Test-Path $platforms) {
+            Write-Host "----- Files in $platforms -----"
+            Get-ChildItem $platforms | Format-Table Name, Length
+          } else {
+            Write-Host "WARNING: $platforms does not exist"
+          }
+          # Quick liveness probe: can the binary load Qt and enumerate its own
+          # test functions? --listfunctions completes in <1s and exits 0 on
+          # success. If this fails before -v2 runs, output capture isn't the
+          # problem — the binary itself can't initialize.
+          Write-Host "----- Probe: --listfunctions -----"
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $env:QT_DEBUG_PLUGINS = '1'
+          & $exe.FullName --listfunctions 2>&1 | Out-Host
+          Write-Host "----- Probe exit code: $LASTEXITCODE -----"
+          Remove-Item Env:\QT_DEBUG_PLUGINS
+
       - name: Run tests
         working-directory: tests
         env:
@@ -89,18 +115,13 @@ jobs:
           CDIMAGE_SKIP_LONG: "1"
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
           Write-Host "Running: $($exe.FullName)"
-          # Use Start-Process with file redirection — PowerShell's native-exe stdout
-          # capture sometimes drops output when the process exits non-zero, hiding
-          # the actual test failures from CI logs.
-          $proc = Start-Process -FilePath $exe.FullName -ArgumentList '-v2' `
-              -Wait -NoNewWindow -PassThru `
-              -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log
-          Write-Host "----- STDOUT -----"
-          if (Test-Path stdout.log) { Get-Content stdout.log }
-          Write-Host "----- STDERR -----"
-          if (Test-Path stderr.log) { Get-Content stderr.log }
-          Write-Host "----- Exit code: $($proc.ExitCode) -----"
-          if ($proc.ExitCode -ne 0) { throw "Tests failed with exit code $($proc.ExitCode)" }
+          # PowerShell pipeline capture (2>&1 | Tee-Object) reliably collects
+          # both streams from a native console app, unlike Start-Process file
+          # redirection which has dropped output on previous CI runs.
+          & $exe.FullName -v2 2>&1 | Tee-Object -FilePath testrun.log
+          $code = $LASTEXITCODE
+          Write-Host "----- Exit code: $code -----"
+          if ($code -ne 0) { throw "Tests failed with exit code $code" }
