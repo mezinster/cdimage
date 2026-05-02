@@ -71,6 +71,16 @@ jobs:
           if (-not $exe) { throw "cdimage_tests.exe not built" }
           Write-Host "Found test binary at: $($exe.FullName)"
           windeployqt --no-translations --no-system-d3d-compiler --no-opengl-sw $exe.FullName
+          # windeployqt only deploys the platform plugin it thinks the app uses
+          # (qwindows.dll for GUI apps). For headless CI we run with
+          # QT_QPA_PLATFORM=offscreen, which needs qoffscreen.dll. Copy it in.
+          $qtBin       = (Get-Command qmake).Source | Split-Path
+          $qtRoot      = Split-Path $qtBin -Parent
+          $offscreen   = Join-Path $qtRoot 'plugins\platforms\qoffscreen.dll'
+          $destPlatforms = Join-Path $exe.Directory.FullName 'platforms'
+          if (-not (Test-Path $destPlatforms)) { New-Item -ItemType Directory $destPlatforms | Out-Null }
+          Copy-Item $offscreen $destPlatforms -Force
+          Write-Host "Staged qoffscreen.dll into $destPlatforms"
 
       - name: Run tests
         working-directory: tests
@@ -82,5 +92,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
           Write-Host "Running: $($exe.FullName)"
-          & $exe.FullName -v2
-          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+          # Use Start-Process with file redirection — PowerShell's native-exe stdout
+          # capture sometimes drops output when the process exits non-zero, hiding
+          # the actual test failures from CI logs.
+          $proc = Start-Process -FilePath $exe.FullName -ArgumentList '-v2' `
+              -Wait -NoNewWindow -PassThru `
+              -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log
+          Write-Host "----- STDOUT -----"
+          if (Test-Path stdout.log) { Get-Content stdout.log }
+          Write-Host "----- STDERR -----"
+          if (Test-Path stderr.log) { Get-Content stderr.log }
+          Write-Host "----- Exit code: $($proc.ExitCode) -----"
+          if ($proc.ExitCode -ne 0) { throw "Tests failed with exit code $($proc.ExitCode)" }
