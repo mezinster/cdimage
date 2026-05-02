@@ -8,6 +8,11 @@
 #include <cstring>
 #include <stdexcept>
 
+#include <imapi2.h>
+#include <imapi2error.h>
+#include <shlwapi.h>
+#include <comdef.h>
+
 QStringList WindowsDiscBackend::availableDevices() {
     QStringList result;
     DWORD drives = GetLogicalDrives();
@@ -107,6 +112,14 @@ RawDiscInfo WindowsDiscBackend::queryDisc(const QString& devicePath) {
 
 BurnResult WindowsDiscBackend::burnTestPattern(const QString& devicePath,
                                                 const QString& trackFile) {
+    BurnResult r = burnViaImapi(devicePath, trackFile);
+    if (r.errorMessage.startsWith(QStringLiteral("IMAPI unavailable")))
+        return burnViaCdrecord(devicePath, trackFile);
+    return r;
+}
+
+BurnResult WindowsDiscBackend::burnViaCdrecord(const QString& devicePath,
+                                                const QString& trackFile) {
     BurnResult r;
     if (devicePath.size() < 5) {
         r.errorMessage = QStringLiteral("Bad device path: %1").arg(devicePath);
@@ -143,6 +156,172 @@ BurnResult WindowsDiscBackend::burnTestPattern(const QString& devicePath,
     r.exitCode = proc.exitCode();
     if (r.exitCode != 0)
         r.errorMessage = QStringLiteral("cdrecord exited with code %1").arg(r.exitCode);
+    return r;
+}
+
+BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
+                                             const QString& trackFile) {
+    BurnResult r;
+
+    // ---- 1. Initialise COM ----
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool comInited = SUCCEEDED(hr);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        // RPC_E_CHANGED_MODE means COM was already initialised with a different
+        // model — that's fine, we can still use it.
+        r.errorMessage = QStringLiteral("IMAPI unavailable: CoInitializeEx failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    IDiscMaster2*           master   = nullptr;
+    IDiscRecorder2*         recorder = nullptr;
+    IDiscFormat2TrackAtOnce* format  = nullptr;
+    IStream*                stream   = nullptr;
+
+    auto cleanup = [&]() {
+        if (stream)   { stream->Release();   stream   = nullptr; }
+        if (format)   { format->Release();   format   = nullptr; }
+        if (recorder) { recorder->Release(); recorder = nullptr; }
+        if (master)   { master->Release();   master   = nullptr; }
+        if (comInited) CoUninitialize();
+    };
+
+    // ---- 2. IDiscMaster2 ----
+    hr = CoCreateInstance(CLSID_MsftDiscMaster2, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IDiscMaster2, reinterpret_cast<void**>(&master));
+    if (FAILED(hr)) {
+        const QString msg = QString::fromWCharArray(_com_error(hr).ErrorMessage());
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI unavailable: IDiscMaster2 creation failed: %1").arg(msg);
+        return r;
+    }
+
+    // ---- 3. Find recorder matching devicePath ----
+    // devicePath is like "\\\\.\\D:" — the drive letter is at index 4.
+    if (devicePath.size() < 5) {
+        cleanup();
+        r.errorMessage = QStringLiteral("Bad device path: %1").arg(devicePath);
+        return r;
+    }
+    const QChar wantedLetter = devicePath.at(4).toUpper();
+
+    LONG recorderCount = 0;
+    master->get_Count(&recorderCount);
+
+    for (LONG i = 0; i < recorderCount && recorder == nullptr; ++i) {
+        BSTR uid = nullptr;
+        if (FAILED(master->get_Item(i, &uid))) continue;
+
+        IDiscRecorder2* tmp = nullptr;
+        hr = CoCreateInstance(CLSID_MsftDiscRecorder2, nullptr, CLSCTX_INPROC_SERVER,
+                              IID_IDiscRecorder2, reinterpret_cast<void**>(&tmp));
+        if (FAILED(hr)) { SysFreeString(uid); continue; }
+
+        if (SUCCEEDED(tmp->InitializeDiscRecorder(uid))) {
+            SAFEARRAY* paths = nullptr;
+            if (SUCCEEDED(tmp->get_VolumePathNames(&paths)) && paths != nullptr) {
+                LONG lBound = 0, uBound = -1;
+                SafeArrayGetLBound(paths, 1, &lBound);
+                SafeArrayGetUBound(paths, 1, &uBound);
+                for (LONG j = lBound; j <= uBound && recorder == nullptr; ++j) {
+                    BSTR volPath = nullptr;
+                    if (SUCCEEDED(SafeArrayGetElement(paths, &j, &volPath)) && volPath != nullptr) {
+                        // volPath is typically L"D:\" — compare first character
+                        if (wcslen(volPath) > 0) {
+                            QChar volLetter = QChar(static_cast<ushort>(volPath[0])).toUpper();
+                            if (volLetter == wantedLetter)
+                                recorder = tmp;  // keep this recorder
+                        }
+                        SysFreeString(volPath);
+                    }
+                }
+                SafeArrayDestroy(paths);
+            }
+        }
+
+        SysFreeString(uid);
+        if (recorder == nullptr)
+            tmp->Release();
+    }
+
+    if (recorder == nullptr) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: no recorder found for device %1").arg(devicePath);
+        return r;
+    }
+
+    // ---- 5. IDiscFormat2TrackAtOnce ----
+    hr = CoCreateInstance(CLSID_MsftDiscFormat2TrackAtOnce, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IDiscFormat2TrackAtOnce, reinterpret_cast<void**>(&format));
+    if (FAILED(hr)) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: IDiscFormat2TrackAtOnce creation failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    // ---- 6. Attach recorder and set client name ----
+    hr = format->put_Recorder(recorder);
+    if (FAILED(hr)) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: put_Recorder failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+    format->put_ClientName(L"CDImage");
+
+    // ---- 7. Open IStream over the WAV file ----
+    const std::wstring wTrackFile = trackFile.toStdWString();
+    hr = SHCreateStreamOnFileEx(wTrackFile.c_str(),
+                                STGM_READ | STGM_SHARE_DENY_WRITE,
+                                0, FALSE, nullptr, &stream);
+    if (FAILED(hr)) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: cannot open track file '%1': %2")
+                         .arg(trackFile,
+                              QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    // Seek past the 44-byte WAV header so IMAPI sees raw PCM
+    LARGE_INTEGER headerOffset;
+    headerOffset.QuadPart = 44;
+    stream->Seek(headerOffset, STREAM_SEEK_SET, nullptr);
+
+    // ---- 8. PrepareMedia ----
+    hr = format->PrepareMedia();
+    if (FAILED(hr)) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: PrepareMedia failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    // ---- 9. AddAudioTrack ----
+    r.started = true;
+    hr = format->AddAudioTrack(stream);
+    if (FAILED(hr)) {
+        format->ReleaseMedia();
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: AddAudioTrack failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    // ---- 10. ReleaseMedia (finalise disc) ----
+    hr = format->ReleaseMedia();
+    if (FAILED(hr)) {
+        cleanup();
+        r.errorMessage = QStringLiteral("IMAPI: ReleaseMedia failed: %1")
+                         .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        return r;
+    }
+
+    // ---- Success ----
+    r.finished = true;
+    r.exitCode = 0;
+    cleanup();
     return r;
 }
 

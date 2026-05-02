@@ -36,5 +36,6 @@ unix:SOURCES  += ../src/linuxdiscbackend.cpp
 unix:HEADERS  += ../src/linuxdiscbackend.h
 win32:SOURCES += ../src/windowsdiscbackend.cpp
 win32:HEADERS += ../src/windowsdiscbackend.h
+win32:LIBS    += -lole32 -loleaut32 -lshlwapi -luuid
 
 RESOURCES += ../resources/profiles.qrc
