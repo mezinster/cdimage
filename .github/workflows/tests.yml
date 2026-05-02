@@ -82,5 +82,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
           Write-Host "Running: $($exe.FullName)"
-          & $exe.FullName -v2
-          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+          # Use Start-Process with file redirection — PowerShell's native-exe stdout
+          # capture sometimes drops output when the process exits non-zero, hiding
+          # the actual test failures from CI logs.
+          $proc = Start-Process -FilePath $exe.FullName -ArgumentList '-v2' `
+              -Wait -NoNewWindow -PassThru `
+              -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log
+          Write-Host "----- STDOUT -----"
+          if (Test-Path stdout.log) { Get-Content stdout.log }
+          Write-Host "----- STDERR -----"
+          if (Test-Path stderr.log) { Get-Content stderr.log }
+          Write-Host "----- Exit code: $($proc.ExitCode) -----"
+          if ($proc.ExitCode -ne 0) { throw "Tests failed with exit code $($proc.ExitCode)" }
