@@ -1,0 +1,47 @@
+# qmake-generated build files
+Makefile
+Makefile.*
+.qmake.stash
+.qmake.cache
+
+# Object files & build outputs
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exp
+*.pdb
+*.ilk
+*.exe
+
+# Qt MOC / RCC / UIC auto-generated sources
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+qrc_*.cpp
+ui_*.h
+
+# qmake target wrappers and per-config dirs
+target_wrapper.sh
+debug/
+release/
+
+# Test binaries
+tests/cdimage_tests
+tests/cdimage_tests.exe
+
+# Qt deployed runtime stage
+tests/locallib/
+tests/platforms/
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store
+Thumbs.db
