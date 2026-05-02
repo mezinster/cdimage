@@ -5,6 +5,7 @@
 #include "test_discdetector.h"
 #include "test_photocalibration.h"
 #include "test_burnresult.h"
+#include "test_converter_wav.h"
 
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
@@ -16,5 +17,6 @@ int main(int argc, char* argv[]) {
     run(new TestDiscDetector);
     run(new TestPhotoCalibration);
     run(new TestBurnResult);
+    run(new TestConverterWav);
     return status;
 }
