@@ -11,6 +11,17 @@ I played with color shades and different compact discs with moderate success and
 ## Building
 You'll need [Qt 6](https://www.qt.io/product/qt6) library to build it. Just run `qmake` and then `make`. Alternatively you could build the project with [Qt Creator](https://www.qt.io/product/development-tools) if you installed it.
 
+### Tests
+A QTest-based unit suite lives in `tests/`. Build and run it with:
+
+```
+cd tests
+qmake && make
+./cdimage_tests
+```
+
+The Converter WAV-header tests each write ~800 MB and take a few minutes apiece. To skip them during fast iteration, set `CDIMAGE_SKIP_LONG=1`. CI runs the full suite with that variable set; release verification should run without it.
+
 ## Windows Users
 Since many Windows users experienced problems with building it or did not want to install Qt and all the stuff, I've made a [Windows binary build](https://github.com/arduinocelentano/cdimage/releases).
 However I have not tested it thoroughly yet because I don't have a working CD recorder at hand right now.
@@ -29,17 +40,24 @@ You could try to guess geometry of an unknown disc and input it manually, but yo
 
 * **mouse scroll wheel** — zoom image.
 
-2. Click Edit→Create track and select the model of your compact disc. 
+2. Click **Edit→Create track** and pick a profile for your compact disc.
 
-> If your disc is not in the list (which is likely), you may input geometry manually. However unknown disc calibration is neither easy nor quick procedure. If you still wish to give it a try, I recommend that you read the ["Red Book"](https://www.ecma-international.org/wp-content/uploads/ECMA-130_2nd_edition_june_1996.pdf) as well as  [Considering Calibration](#considering-calibration) section before you start. **If you know the geometry of some compact disc which is not in the list, let me know and I’ll include it into the distribution.**
+   Profiles are tagged in the dropdown:
+   * `[Local]` — calibrated by you and saved to your local library.
+   * `[Bundled]` — shipped with the application.
 
-Depending on your hardware, conversion will take some time. Finally you’ll get a huge Audio CD track. *Yes, about 800Mb, which is normal for **Audio CD**.*
+   If you've just calibrated a disc via the wizard, that profile is preselected automatically.
 
-3. You could use any software you like to burn it. For example:
+> If your disc is not in the list (which is likely), you can either input geometry manually or run the calibration wizard via **Edit→Detect disc geometry**. The wizard burns a test pattern, then measures the actual geometry either from a photograph of the disc or by drive read-back, and saves the result to your local profile library so you don't have to redo it next time. The library lives at the platform-standard `AppDataLocation/CDImage/profiles.json`. See [Considering Calibration](#considering-calibration) for the math.
 
-`cdrecord -audio dev=<recorder_device> <generated_track>`
+Depending on your hardware, conversion will take some time. The output is a standard PCM WAV file (~800 MB — that's the size of a full Audio CD).
 
-Remember that you should create an **Audio CD**! 
+3. Burn the file as an **Audio CD** with any burning software:
+
+   * **Nero Burning Rom**, **ImgBurn**, **Windows Media Player** — create an Audio CD project and add the WAV file.
+   * **cdrecord** (Linux/Cygwin): `cdrecord -audio dev=<recorder_device> <generated_track.wav>`
+
+Remember that you should create an **Audio CD**, not a data CD!
 
 ## Considering Calibration 
 From the Mathematical point of view we have a sort of [multi-objective optimization](https://en.wikipedia.org/wiki/Multi-objective_optimization) problem. Bicriteria optimization, to be more precise. It means that two objective functions should be optimized simultaneously. If we define goal as getting a "neat image", we need an expert who is able to provide some feedback regarding image "quality". Which leads us to [interactive methods](https://en.wikipedia.org/wiki/Multi-objective_optimization#Solution).
