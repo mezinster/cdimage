@@ -227,16 +227,27 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
                 LONG lBound = 0, uBound = -1;
                 SafeArrayGetLBound(paths, 1, &lBound);
                 SafeArrayGetUBound(paths, 1, &uBound);
+                // IDiscRecorder2::get_VolumePathNames returns a SAFEARRAY of
+                // VARIANTs (each VT_BSTR), NOT a SAFEARRAY of raw BSTRs.
+                // Reading via &volPath (BSTR*) made SafeArrayGetElement copy
+                // sizeof(VARIANT)=24 bytes into an 8-byte slot; the first 8
+                // bytes are {vt, reserved...} = 0x0000000000000008, so
+                // volPath ended up = 0x8 and wcslen(0x8) AV'd at address 8
+                // inside ucrtbase. Use the proper VARIANT extraction.
                 for (LONG j = lBound; j <= uBound && recorder == nullptr; ++j) {
-                    BSTR volPath = nullptr;
-                    if (SUCCEEDED(SafeArrayGetElement(paths, &j, &volPath)) && volPath != nullptr) {
-                        // volPath is typically L"D:\" — compare first character
-                        if (wcslen(volPath) > 0) {
-                            QChar volLetter = QChar(static_cast<ushort>(volPath[0])).toUpper();
+                    VARIANT v;
+                    VariantInit(&v);
+                    if (SUCCEEDED(SafeArrayGetElement(paths, &j, &v))) {
+                        if (v.vt == VT_BSTR && v.bstrVal != nullptr &&
+                            SysStringLen(v.bstrVal) > 0) {
+                            QChar volLetter = QChar(
+                                static_cast<ushort>(v.bstrVal[0])).toUpper();
+                            qInfo() << "IMAPI recorder candidate volPath letter="
+                                    << volLetter;
                             if (volLetter == wantedLetter)
                                 recorder = tmp;  // keep this recorder
                         }
-                        SysFreeString(volPath);
+                        VariantClear(&v);  // frees the contained BSTR
                     }
                 }
                 SafeArrayDestroy(paths);
