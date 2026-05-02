@@ -1,6 +1,7 @@
 #include "windowsdiscbackend.h"
 
 #include <QProcess>
+#include <QDebug>
 
 #include <windows.h>
 #include <ntddscsi.h>
@@ -162,9 +163,11 @@ BurnResult WindowsDiscBackend::burnViaCdrecord(const QString& devicePath,
 BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
                                              const QString& trackFile) {
     BurnResult r;
+    qInfo() << "IMAPI burnViaImapi begin device=" << devicePath << "track=" << trackFile;
 
     // ---- 1. Initialise COM ----
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    qInfo() << "IMAPI CoInitializeEx hr=0x" << QString::number(hr, 16);
     const bool comInited = SUCCEEDED(hr);
     if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
         // RPC_E_CHANGED_MODE means COM was already initialised with a different
@@ -248,8 +251,10 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
     if (recorder == nullptr) {
         cleanup();
         r.errorMessage = QStringLiteral("IMAPI: no recorder found for device %1").arg(devicePath);
+        qWarning() << r.errorMessage << "(scanned" << recorderCount << "recorders)";
         return r;
     }
+    qInfo() << "IMAPI recorder bound for letter" << wantedLetter;
 
     // ---- 5. IDiscFormat2TrackAtOnce ----
     hr = CoCreateInstance(CLSID_MsftDiscFormat2TrackAtOnce, nullptr, CLSCTX_INPROC_SERVER,
@@ -294,31 +299,38 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
     stream->Seek(headerOffset, STREAM_SEEK_SET, nullptr);
 
     // ---- 8. PrepareMedia ----
+    qInfo() << "IMAPI PrepareMedia";
     hr = format->PrepareMedia();
     if (FAILED(hr)) {
         cleanup();
         r.errorMessage = QStringLiteral("IMAPI: PrepareMedia failed: %1")
                          .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        qWarning() << r.errorMessage;
         return r;
     }
 
     // ---- 9. AddAudioTrack ----
+    qInfo() << "IMAPI AddAudioTrack starting";
     r.started = true;
     hr = format->AddAudioTrack(stream);
+    qInfo() << "IMAPI AddAudioTrack hr=0x" << QString::number(hr, 16);
     if (FAILED(hr)) {
         format->ReleaseMedia();
         cleanup();
         r.errorMessage = QStringLiteral("IMAPI: AddAudioTrack failed: %1")
                          .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        qWarning() << r.errorMessage;
         return r;
     }
 
     // ---- 10. ReleaseMedia (finalise disc) ----
+    qInfo() << "IMAPI ReleaseMedia (finalize)";
     hr = format->ReleaseMedia();
     if (FAILED(hr)) {
         cleanup();
         r.errorMessage = QStringLiteral("IMAPI: ReleaseMedia failed: %1")
                          .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
+        qWarning() << r.errorMessage;
         return r;
     }
 
@@ -326,6 +338,7 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
     r.finished = true;
     r.exitCode = 0;
     cleanup();
+    qInfo() << "IMAPI burn succeeded";
     return r;
 }
 

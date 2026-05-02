@@ -10,6 +10,8 @@
 #include <QLineEdit>
 #include <QRadioButton>
 #include <QProgressBar>
+#include <QFutureWatcher>
+#include <QPushButton>
 
 enum CalibrationPageId {
     Page_Welcome = 0, Page_BurnPattern, Page_MethodSelect,
@@ -47,12 +49,15 @@ public:
     bool isComplete() const override;
 private slots:
     void doBurn();
+    void onBurnFinished();
 private:
-    IDiscBackend* m_backend;
-    RawDiscInfo   m_disc;
-    QLabel*       m_status;
-    QProgressBar* m_progress;
-    bool          m_done = false;
+    IDiscBackend*                  m_backend;
+    RawDiscInfo                    m_disc;
+    QLabel*                        m_status;
+    QProgressBar*                  m_progress;
+    QPushButton*                   m_burnBtn = nullptr;
+    QFutureWatcher<BurnResult>*    m_watcher = nullptr;
+    bool                           m_done = false;
 };
 
 class MethodSelectPage : public QWizardPage {

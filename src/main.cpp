@@ -16,6 +16,59 @@
 
 #include "mainwindow.h"
 #include <QApplication>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QMutex>
+#include <QMutexLocker>
+
+#ifdef Q_OS_WIN
+#  include <windows.h>
+#endif
+
+static QFile  g_logFile;
+static QMutex g_logMutex;
+
+static void cdimageMessageHandler(QtMsgType type,
+                                  const QMessageLogContext& /*ctx*/,
+                                  const QString& msg) {
+	QMutexLocker lock(&g_logMutex);
+	if (!g_logFile.isOpen()) return;
+	const char* level = "?";
+	switch (type) {
+	case QtDebugMsg:    level = "DEBUG"; break;
+	case QtInfoMsg:     level = "INFO";  break;
+	case QtWarningMsg:  level = "WARN";  break;
+	case QtCriticalMsg: level = "CRIT";  break;
+	case QtFatalMsg:    level = "FATAL"; break;
+	}
+	QTextStream out(&g_logFile);
+	out << QDateTime::currentDateTime().toString(Qt::ISODateWithMs)
+	    << " [" << level << "] " << msg << '\n';
+	out.flush();
+}
+
+#ifdef Q_OS_WIN
+static LONG WINAPI cdimageUnhandledFilter(EXCEPTION_POINTERS* ep) {
+	QMutexLocker lock(&g_logMutex);
+	if (g_logFile.isOpen()) {
+		QTextStream out(&g_logFile);
+		out << QDateTime::currentDateTime().toString(Qt::ISODateWithMs)
+		    << " [CRASH] code=0x"
+		    << QString::number(ep->ExceptionRecord->ExceptionCode, 16).toUpper()
+		    << " addr=0x"
+		    << QString::number(reinterpret_cast<quintptr>(
+		           ep->ExceptionRecord->ExceptionAddress), 16).toUpper()
+		    << '\n';
+		out.flush();
+		g_logFile.close();
+	}
+	// Let WER take over so a minidump still gets written.
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
 
 int main ( int argc, char** argv )
 {
@@ -23,7 +76,23 @@ int main ( int argc, char** argv )
 	QCoreApplication::setOrganizationName("CDImage");
 	QCoreApplication::setOrganizationDomain("cdimage.local");
 	QCoreApplication::setApplicationName("CDImage");
+
+	// Persistent log so silent crashes leave a trail next to AppData.
+	const QString logDir = QStandardPaths::writableLocation(
+	                           QStandardPaths::AppDataLocation);
+	QDir().mkpath(logDir);
+	g_logFile.setFileName(logDir + "/cdimage.log");
+	g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+	qInstallMessageHandler(cdimageMessageHandler);
+	qInfo() << "==================================================";
+	qInfo() << "cdimage starting; log:" << g_logFile.fileName();
+#ifdef Q_OS_WIN
+	SetUnhandledExceptionFilter(cdimageUnhandledFilter);
+#endif
+
 	MainWindow win;
 	win.show();
-	return app.exec();
+	const int code = app.exec();
+	qInfo() << "cdimage exiting with code" << code;
+	return code;
 }
