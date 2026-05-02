@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Linux ──────────────────────────────────────────────────────────────────
+  test-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6 and build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-tools-dev-tools build-essential libgl-dev
+
+      - name: Build app
+        run: qmake6 cdimage.pro && make -j$(nproc)
+
+      - name: Build tests
+        working-directory: tests
+        run: qmake6 tests.pro && make -j$(nproc)
+
+      - name: Run tests
+        working-directory: tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          CDIMAGE_SKIP_LONG: "1"
+        run: ./cdimage_tests -v2
+
+  # ── Windows ────────────────────────────────────────────────────────────────
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.6.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build app
+        run: |
+          qmake cdimage.pro
+          nmake
+
+      - name: Build tests
+        working-directory: tests
+        run: |
+          qmake tests.pro
+          nmake
+
+      - name: Run tests
+        working-directory: tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          CDIMAGE_SKIP_LONG: "1"
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
+          & $exe.FullName -v2
