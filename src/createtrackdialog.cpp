@@ -42,11 +42,13 @@ void CreateTrackDialog::populatePresets() {
 
 int CreateTrackDialog::indexForProfile(const DiscProfile& p) const {
     if (p.discId.isEmpty() && p.name.isEmpty()) return -1;
-    for (int i = 0; i < m_orderedProfiles.size(); ++i) {
-        const DiscProfile& q = m_orderedProfiles.at(i);
-        if (!p.discId.isEmpty() && q.discId == p.discId) return i;
-        if (!p.name.isEmpty()   && q.name   == p.name  ) return i;
+    if (!p.discId.isEmpty()) {
+        for (int i = 0; i < m_orderedProfiles.size(); ++i)
+            if (m_orderedProfiles.at(i).discId == p.discId) return i;
+        return -1;
     }
+    for (int i = 0; i < m_orderedProfiles.size(); ++i)
+        if (m_orderedProfiles.at(i).name == p.name) return i;
     return -1;
 }
 
