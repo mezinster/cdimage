@@ -99,6 +99,15 @@ RawDiscInfo LinuxDiscBackend::queryDisc(const QString& devicePath) {
     return info;
 }
 
+DiscCapacity LinuxDiscBackend::queryCapacity(const QString& /*devicePath*/) {
+    // cdrecord is the actual burn engine on Linux and computes capacity
+    // itself from the lead-out / ATIP. Report unknown so the GUI prompts
+    // the user when generating a track. (A future enhancement could parse
+    // `cdrecord -atip dev=...` output, but cdrtools' own enforcement is
+    // already reliable.)
+    return DiscCapacity{};
+}
+
 BurnResult LinuxDiscBackend::burnTestPattern(const QString& devicePath,
                                               const QString& trackFile) {
     BurnResult r;

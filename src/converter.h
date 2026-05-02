@@ -58,7 +58,13 @@ public:
 	void setR0(double r0){m_r0 = r0;}
 	void setMixColors(bool m){m_mixColors = m;}
 	///]
-    bool convert(const QImage img, const QString& filename);
+    // maxAudioBytes: stop spiraling once the WAV's audio data reaches this
+    // many bytes. Default = 800 MiB (legacy hardcoded value, still safe for
+    // 80-min CD-Rs at ~847 MB capacity). Pass the actual disc capacity (in
+    // bytes, rounded down to a 2352-byte sector boundary) for proper sizing
+    // on 74-min and 90-min media.
+    bool convert(const QImage img, const QString& filename,
+                 qint64 maxAudioBytes = qint64(800) * 1024 * 1024);
 signals:
     void progressChanged(int progress);
 public slots:
