@@ -62,7 +62,7 @@ void MainWindow::loadImage() {
 
 void MainWindow::createTrack() {
     m_image = centralView.getImage();
-    CreateTrackDialog dial(m_profileDb.data(), this);
+    CreateTrackDialog dial(m_profileDb.data(), m_currentProfile, this);
     if (!dial.exec()) return;
 
     const DiscProfile profile = dial.selectedProfile();
@@ -75,7 +75,10 @@ void MainWindow::createTrack() {
 
     if (converter.convert(m_image, dial.leFileName->text()))
         QMessageBox::information(this, tr("Success"),
-            tr("Track created. Burn with:<br><b>cdrecord -audio dev=&lt;device&gt; %1</b>")
+            tr("Track created as a standard audio WAV file:<br><b>%1</b><br><br>"
+               "Burn it as an <b>Audio CD</b> with any burning software "
+               "(Nero, ImgBurn, Windows Media Player, or "
+               "<code>cdrecord -audio dev=&lt;device&gt; %1</code>).")
             .arg(dial.leFileName->text()));
     else
         QMessageBox::warning(this, tr("Stopped"), tr("Cancelled by user."));
