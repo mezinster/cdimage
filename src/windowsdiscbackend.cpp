@@ -385,10 +385,13 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
         return r;
     }
 
-    // Seek past the 44-byte WAV header so IMAPI sees raw PCM
-    LARGE_INTEGER headerOffset;
-    headerOffset.QuadPart = 44;
-    stream->Seek(headerOffset, STREAM_SEEK_SET, nullptr);
+    // IMPORTANT: do NOT seek past the WAV header. AddAudioTrack accepts a
+    // RIFF/WAVE file IStream starting at byte 0 — it parses the header
+    // itself to determine sample rate / bit depth / channels and locate
+    // the audio 'data' chunk. Seeking past the 44-byte header makes IMAPI
+    // try to read PCM samples as if they were the RIFF magic, which
+    // returns 0xC0AA050D ("audio stream not in expected format").
+    // The Microsoft IMAPI 2 sample passes the stream at position 0; so do we.
 
     // ---- 8. PrepareMedia ----
     qInfo() << "IMAPI PrepareMedia";
