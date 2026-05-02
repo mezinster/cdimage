@@ -23,6 +23,7 @@
 
 #include "converter.h"
 #include <QtEndian>
+#include <QDebug>
 
 Converter::Converter(QObject *parent)
  : QObject(parent)
@@ -65,6 +66,9 @@ Converter::~Converter()
 
 bool Converter::convert(const QImage img, const QString& filename)
 {
+	qInfo() << "Converter::convert begin file=" << filename
+	        << "img=" << img.width() << "x" << img.height()
+	        << "tr0=" << m_tr0 << "dtr=" << m_dtr << "r0=" << m_r0;
 	const char pallete[]={'\x10','\x21','\x28','\xAA'};
 	double tr = m_tr0;
 	double r = m_r0;
@@ -83,9 +87,14 @@ bool Converter::convert(const QImage img, const QString& filename)
 	int zf=0;
 	int ic=0;
 	unsigned char color = 0, cl = 0, c1 = 0 , c2 = 0 ;
+	const int imgW = img.width();
+	const int imgH = img.height();
 	QFile imageFile(filename);
 	imageFile.remove();
-	if (!imageFile.open(QIODevice::WriteOnly)) return false;
+	if (!imageFile.open(QIODevice::WriteOnly)) {
+		qWarning() << "Converter::convert: cannot open" << filename;
+		return false;
+	}
 	m_audioBytesWritten = 0;
 	writeWavHeader(&imageFile, 0);  // placeholder; patched at end
 	while (c<(all-tr))
@@ -102,7 +111,16 @@ bool Converter::convert(const QImage img, const QString& filename)
 			alpha=2*M_PI*i/itr;
 			xi=cx+ri*cos(alpha);
 			yi=cy+ri*sin(alpha);
-			color=qGray(img.pixel(int(xi),int(yi)));
+			// Once r exceeds rcd the spiral walks outside the source image. Pre-
+			// existing code called QImage::pixel() unconditionally, which is UB
+			// past the image bounds and on Windows lands as an access violation
+			// inside ucrtbase.dll's heap arithmetic. Treat out-of-bounds as black.
+			const int xPix = static_cast<int>(xi);
+			const int yPix = static_cast<int>(yi);
+			if (xPix >= 0 && xPix < imgW && yPix >= 0 && yPix < imgH)
+				color = qGray(img.pixel(xPix, yPix));
+			else
+				color = 0;
 			c1=color/85;
 			c2=c1+1;
 			//ad (pallete[cl], imagefile);
@@ -153,6 +171,7 @@ bool Converter::convert(const QImage img, const QString& filename)
 	le = qToLittleEndian(dataBytes);
 	imageFile.write(reinterpret_cast<const char*>(&le), 4);
 	imageFile.close();
+	qInfo() << "Converter::convert end audioBytes=" << m_audioBytesWritten;
     return true;
 }
 

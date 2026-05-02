@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QDir>
+#include <QtConcurrent/QtConcurrent>
 
 static const QMap<MediaType, QString> kMediaNames = {
     {MediaType::CD_R,   "CD-R"},   {MediaType::CD_RW,  "CD-RW"},
@@ -62,36 +63,64 @@ BurnPatternPage::BurnPatternPage(IDiscBackend* backend, const RawDiscInfo& disc,
     m_progress = new QProgressBar(this);
     m_progress->setRange(0, 0);
     m_progress->setVisible(false);
-    auto* btn = new QPushButton(tr("Burn Test Pattern"), this);
-    connect(btn, &QPushButton::clicked, this, &BurnPatternPage::doBurn);
+    m_burnBtn = new QPushButton(tr("Burn Test Pattern"), this);
+    connect(m_burnBtn, &QPushButton::clicked, this, &BurnPatternPage::doBurn);
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(m_status);
     layout->addWidget(m_progress);
-    layout->addWidget(btn);
+    layout->addWidget(m_burnBtn);
 }
 
 void BurnPatternPage::initializePage() { m_done = false; emit completeChanged(); }
 bool BurnPatternPage::isComplete() const { return m_done; }
 
 void BurnPatternPage::doBurn() {
+    if (m_watcher) return;  // already running
+
+    m_burnBtn->setEnabled(false);
     m_progress->setVisible(true);
-    m_status->setText(tr("Generating test track (this may take several minutes)…"));
-    qApp->processEvents();
+    m_status->setText(tr("Generating test track + burning (this may take several minutes)…"));
 
     const QString device = wizard()->property("devicePath").toString();
     const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
+    IDiscBackend* backend = m_backend;
+    qInfo() << "BurnPatternPage::doBurn dispatch device=" << device << "wav=" << outPath;
 
-    DiscProfile defaultProfile;
-    if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
-        m_status->setText(tr("Failed to generate test track."));
-        m_progress->setVisible(false);
-        return;
-    }
+    // Heavy work runs on a thread-pool worker so the GUI thread stays
+    // responsive (no DWM "Not Responding" hang) and any C-runtime fault
+    // during WAV generation propagates as an SEH on the worker rather than
+    // killing the GUI thread inline.
+    QFuture<BurnResult> fut = QtConcurrent::run([backend, device, outPath]() {
+        BurnResult r;
+        DiscProfile defaultProfile;
+        qInfo() << "Worker: generating test pattern WAV";
+        if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
+            r.errorMessage = QStringLiteral("Failed to generate test track WAV.");
+            qWarning() << "Worker: WAV generation failed";
+            return r;
+        }
+        qInfo() << "Worker: WAV generated; invoking burnTestPattern";
+        r = backend->burnTestPattern(device, outPath);
+        qInfo() << "Worker: burnTestPattern returned started="
+                << r.started << "finished=" << r.finished
+                << "exitCode=" << r.exitCode << "msg=" << r.errorMessage;
+        return r;
+    });
 
-    m_status->setText(tr("Burning test pattern to disc…"));
-    qApp->processEvents();
+    m_watcher = new QFutureWatcher<BurnResult>(this);
+    connect(m_watcher, &QFutureWatcherBase::finished,
+            this, &BurnPatternPage::onBurnFinished);
+    m_watcher->setFuture(fut);
+}
 
-    const BurnResult br = m_backend->burnTestPattern(device, outPath);
+void BurnPatternPage::onBurnFinished() {
+    const BurnResult br = m_watcher->result();
+    m_watcher->deleteLater();
+    m_watcher = nullptr;
+
+    m_progress->setVisible(false);
+    m_burnBtn->setEnabled(true);
+
     if (br.succeeded()) {
         m_status->setText(tr("Test pattern burned. Remove the disc and proceed."));
         m_done = true;
@@ -103,7 +132,6 @@ void BurnPatternPage::doBurn() {
             detail += "\n\nProcess output:\n" + br.stderrText.left(2000);
         QMessageBox::critical(this, tr("Burn Failed"), detail);
     }
-    m_progress->setVisible(false);
 }
 
 // ── MethodSelectPage ──────────────────────────────────────────────────────────
