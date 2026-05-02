@@ -31,14 +31,35 @@ void TestPhotoCalibration::findEdge_locates_transition() {
 }
 
 void TestPhotoCalibration::start_extracts_geometry_from_synthetic_photo() {
-    const QImage syntheticPhoto = TestPatternGenerator::generateGradientImage(2000);
+    // Synthesise a step-edge disc photo with realistic CD proportions so the
+    // gradient-path edge detection has unambiguous transitions to lock onto.
+    // Real CDs have inner data start ~24.5 mm and outer data edge ~60 mm. We
+    // map outer=60 mm to 950 px, so px-per-mm ≈ 15.83 and inner→24.5 mm at
+    // 388 px. Three zones: black hub, mid-grey data, white background.
+    const int    size       = 2000;
+    const double cx         = size / 2.0;
+    const double cy         = size / 2.0;
+    const double rHub_px    = 388.0;
+    const double rOuter_px  = 950.0;
+    QImage syntheticPhoto(size, size, QImage::Format_RGB32);
+    syntheticPhoto.fill(qRgb(255, 255, 255));
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const double r = std::sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
+            int gray;
+            if      (r < rHub_px)   gray = 0;
+            else if (r < rOuter_px) gray = 128;
+            else                    gray = 255;
+            syntheticPhoto.setPixel(x, y, qRgb(gray, gray, gray));
+        }
+    }
+
     QTemporaryFile tmp;
     tmp.setFileTemplate(QDir::tempPath() + "/photo_XXXXXX.png");
     tmp.open();
     syntheticPhoto.save(tmp.fileName());
 
     RawDiscInfo disc; disc.discId = "synth"; disc.mediaType = MediaType::CD_RW;
-    // Gradient image → use Gradient path to avoid ring detection on a non-rings image.
     PhotoCalibration cal(tmp.fileName(), PhotoCalibration::PatternType::Gradient);
     QSignalSpy doneSpy(&cal, &PhotoCalibration::finished);
     QSignalSpy failSpy(&cal, &PhotoCalibration::failed);
@@ -50,7 +71,9 @@ void TestPhotoCalibration::start_extracts_geometry_from_synthetic_photo() {
     QCOMPARE(doneSpy.count(), 1);
 
     DiscProfile result = doneSpy[0][0].value<DiscProfile>();
-    QVERIFY(result.r0 > 20.0 && result.r0 < 30.0);
+    // Expected r0 ≈ 24.5 mm; allow ±1.5 mm for sub-pixel edge interpolation.
+    QVERIFY2(result.r0 > 23.0 && result.r0 < 26.0,
+             qPrintable(QString("r0=%1 outside expected 23-26 mm range").arg(result.r0)));
     QVERIFY(result.dtr > 0.0);
 }
 
