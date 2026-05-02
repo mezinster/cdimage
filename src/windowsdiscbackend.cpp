@@ -269,7 +269,11 @@ BurnResult WindowsDiscBackend::burnViaImapi(const QString& devicePath,
                          .arg(QString::fromWCharArray(_com_error(hr).ErrorMessage()));
         return r;
     }
-    format->put_ClientName(L"CDImage");
+    BSTR clientName = SysAllocString(L"CDImage");
+    if (clientName) {
+        format->put_ClientName(clientName);
+        SysFreeString(clientName);
+    }
 
     // ---- 7. Open IStream over the WAV file ----
     const std::wstring wTrackFile = trackFile.toStdWString();
