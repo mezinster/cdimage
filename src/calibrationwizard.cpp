@@ -79,7 +79,7 @@ void BurnPatternPage::doBurn() {
     qApp->processEvents();
 
     const QString device = wizard()->property("devicePath").toString();
-    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.cdr";
+    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
 
     DiscProfile defaultProfile;
     if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
@@ -91,16 +91,17 @@ void BurnPatternPage::doBurn() {
     m_status->setText(tr("Burning test pattern to disc…"));
     qApp->processEvents();
 
-    const BurnResult burnResult = m_backend->burnTestPattern(device, outPath);
-    if (burnResult.succeeded()) {
+    const BurnResult br = m_backend->burnTestPattern(device, outPath);
+    if (br.succeeded()) {
         m_status->setText(tr("Test pattern burned. Remove the disc and proceed."));
         m_done = true;
         emit completeChanged();
     } else {
-        const QString reason = burnResult.errorMessage.isEmpty()
-                               ? tr("cdrecord exited with code %1").arg(burnResult.exitCode)
-                               : burnResult.errorMessage;
-        m_status->setText(tr("Burn failed: %1").arg(reason));
+        m_status->setText(tr("Burn failed: %1").arg(br.errorMessage));
+        QString detail = br.errorMessage;
+        if (!br.stderrText.isEmpty())
+            detail += "\n\nProcess output:\n" + br.stderrText.left(2000);
+        QMessageBox::critical(this, tr("Burn Failed"), detail);
     }
     m_progress->setVisible(false);
 }
