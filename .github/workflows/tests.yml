@@ -85,9 +85,13 @@ jobs:
       - name: Inspect deployed test binary
         working-directory: tests
         shell: pwsh
+        # Diagnostic-only: never fails the build. Even if every probe errors,
+        # the "Run tests" step still gets a chance to capture real output.
+        continue-on-error: true
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
+          if (-not $exe) { Write-Host "ERROR: cdimage_tests.exe not found"; exit 0 }
           Write-Host "----- Files in $($exe.Directory.FullName) -----"
           Get-ChildItem $exe.Directory.FullName | Format-Table Name, Length, LastWriteTime
           $platforms = Join-Path $exe.Directory.FullName 'platforms'
@@ -97,14 +101,16 @@ jobs:
           } else {
             Write-Host "WARNING: $platforms does not exist"
           }
-          # Quick liveness probe: can the binary load Qt and enumerate its own
-          # test functions? --listfunctions completes in <1s and exits 0 on
-          # success. If this fails before -v2 runs, output capture isn't the
-          # problem — the binary itself can't initialize.
-          Write-Host "----- Probe: --listfunctions -----"
           $env:QT_QPA_PLATFORM = 'offscreen'
           $env:QT_DEBUG_PLUGINS = '1'
-          & $exe.FullName --listfunctions 2>&1 | Out-Host
+          # Two QTest probes. Both should print and exit 0 if the binary can
+          # initialize Qt. -help is the most permissive (no plugin required);
+          # -functions exercises the moc-built test class registry.
+          Write-Host "----- Probe: -help -----"
+          & $exe.FullName -help 2>&1 | Out-Host
+          Write-Host "----- Probe exit code: $LASTEXITCODE -----"
+          Write-Host "----- Probe: -functions -----"
+          & $exe.FullName -functions 2>&1 | Out-Host
           Write-Host "----- Probe exit code: $LASTEXITCODE -----"
           Remove-Item Env:\QT_DEBUG_PLUGINS
 
@@ -118,10 +124,34 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
           Write-Host "Running: $($exe.FullName)"
-          # PowerShell pipeline capture (2>&1 | Tee-Object) reliably collects
-          # both streams from a native console app, unlike Start-Process file
-          # redirection which has dropped output on previous CI runs.
-          & $exe.FullName -v2 2>&1 | Tee-Object -FilePath testrun.log
+          # Belt-and-suspenders capture:
+          #   1) Tee-Object pipes stdout+stderr to file AND console (proven to
+          #      work in Run #12 where Start-Process did not).
+          #   2) -o testrun.xml,junitxml writes a structured XML report from
+          #      QTest itself, surviving even if the pipeline drops bytes.
+          & $exe.FullName -v2 -o testrun.xml,junitxml 2>&1 | Tee-Object -FilePath testrun.log
           $code = $LASTEXITCODE
           Write-Host "----- Exit code: $code -----"
+          Write-Host "----- testrun.log size -----"
+          if (Test-Path testrun.log) {
+            Get-Item testrun.log | Format-Table Length, LastWriteTime
+          } else { Write-Host "testrun.log missing" }
+          Write-Host "----- testrun.xml (junitxml) -----"
+          if (Test-Path testrun.xml) {
+            Get-Content testrun.xml
+          } else { Write-Host "testrun.xml missing — QTest never wrote it" }
+          # If the binary crashed before flushing stdout, the OS will have
+          # logged the fault to the Windows Application event log. Pull the
+          # last few minutes of errors so a silent crash leaves a trail.
+          Write-Host "----- Recent Application event log errors -----"
+          try {
+            Get-WinEvent -LogName Application -MaxEvents 50 -ErrorAction Stop |
+              Where-Object {
+                $_.LevelDisplayName -in 'Error','Critical' -and
+                $_.TimeCreated -gt (Get-Date).AddMinutes(-5)
+              } |
+              Format-Table TimeCreated, ProviderName, Id, Message -AutoSize -Wrap
+          } catch {
+            Write-Host "Event log query failed: $_"
+          }
           if ($code -ne 0) { throw "Tests failed with exit code $code" }
