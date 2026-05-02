@@ -9,6 +9,7 @@ HEADERS += test_discprofile.h \
            test_profiledatabase.h \
            test_discdetector.h \
            test_photocalibration.h \
+           test_burnresult.h \
            mockdiscbackend.h \
            ../src/converter.h \
            ../src/profiledatabase.h \
@@ -21,11 +22,17 @@ SOURCES += main.cpp \
            test_profiledatabase.cpp \
            test_discdetector.cpp \
            test_photocalibration.cpp \
+           test_burnresult.cpp \
            ../src/discprofile.cpp \
            ../src/profiledatabase.cpp \
            ../src/discdetector.cpp \
            ../src/photocalibration.cpp \
            ../src/testpatterngenerator.cpp \
            ../src/converter.cpp
+
+unix:SOURCES  += ../src/linuxdiscbackend.cpp
+unix:HEADERS  += ../src/linuxdiscbackend.h
+win32:SOURCES += ../src/windowsdiscbackend.cpp
+win32:HEADERS += ../src/windowsdiscbackend.h
 
 RESOURCES += ../resources/profiles.qrc
