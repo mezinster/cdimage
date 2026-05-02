@@ -62,6 +62,16 @@ jobs:
           qmake tests.pro
           nmake
 
+      - name: Stage Qt runtime alongside test binary
+        working-directory: tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
+          if (-not $exe) { throw "cdimage_tests.exe not built" }
+          Write-Host "Found test binary at: $($exe.FullName)"
+          windeployqt --no-translations --no-system-d3d-compiler --no-opengl-sw $exe.FullName
+
       - name: Run tests
         working-directory: tests
         env:
@@ -69,5 +79,8 @@ jobs:
           CDIMAGE_SKIP_LONG: "1"
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $exe = Get-ChildItem -Recurse -Filter cdimage_tests.exe | Select-Object -First 1
+          Write-Host "Running: $($exe.FullName)"
           & $exe.FullName -v2
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
