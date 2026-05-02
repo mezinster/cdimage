@@ -60,8 +60,15 @@ void TestProfileDatabase::save_returns_true_on_success() {
 }
 
 void TestProfileDatabase::save_returns_false_when_path_unwritable() {
-    // Path inside a non-existent, non-creatable parent (root-owned on Linux).
-    ProfileDatabase db("/proc/cdimage_should_not_exist/profiles.json");
+    // Use a regular file as the parent "directory" — mkpath cannot create a
+    // subdirectory inside a regular file on any OS (Linux: ENOTDIR,
+    // Windows: ERROR_DIRECTORY). Portable substitute for /proc paths.
+    QTemporaryFile blocker;
+    QVERIFY(blocker.open());
+    blocker.close();
+    const QString unwritable = blocker.fileName() + "/profiles.json";
+
+    ProfileDatabase db(unwritable);
     QSignalSpy spy(&db, &ProfileDatabase::saveFailed);
     DiscProfile p; p.discId = "x"; p.name = "X";
     QVERIFY(!db.saveUserProfile(p));
@@ -82,7 +89,12 @@ void TestProfileDatabase::user_and_bundled_profiles_are_separable() {
 }
 
 void TestProfileDatabase::failed_save_does_not_modify_user_list() {
-    ProfileDatabase db("/proc/cdimage_should_not_exist/profiles.json");
+    QTemporaryFile blocker;
+    QVERIFY(blocker.open());
+    blocker.close();
+    const QString unwritable = blocker.fileName() + "/profiles.json";
+
+    ProfileDatabase db(unwritable);
     QCOMPARE(db.userProfiles().size(), 0);
 
     DiscProfile p; p.discId = "x"; p.name = "X";
