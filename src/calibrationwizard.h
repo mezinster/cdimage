@@ -98,9 +98,11 @@ private:
 };
 
 class ResultPage : public QWizardPage {
+    Q_OBJECT
 public:
     ResultPage(ProfileDatabase* db, QWidget* parent = nullptr);
     void initializePage() override;
+    bool validatePage() override;
 private:
     ProfileDatabase* m_db;
     QLabel*          m_lblTr0;

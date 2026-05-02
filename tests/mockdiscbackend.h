@@ -8,6 +8,7 @@ public:
     RawDiscInfo     m_discInfo;
     QVector<qint64> m_seekTimes;
     bool            m_queryFails = false;
+    BurnResult      m_burnResult{true, true, 0, {}, {}};
 
     QStringList availableDevices() override { return {"/dev/mock"}; }
 
@@ -16,7 +17,9 @@ public:
         return m_discInfo;
     }
 
-    bool burnTestPattern(const QString&, const QString&) override { return true; }
+    BurnResult burnTestPattern(const QString&, const QString&) override {
+        return m_burnResult;
+    }
 
     QVector<qint64> measureSeekTimes(const QString&,
                                      const QVector<qint64>& sectors) override {

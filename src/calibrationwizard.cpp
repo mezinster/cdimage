@@ -79,7 +79,7 @@ void BurnPatternPage::doBurn() {
     qApp->processEvents();
 
     const QString device = wizard()->property("devicePath").toString();
-    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.cdr";
+    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
 
     DiscProfile defaultProfile;
     if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
@@ -91,13 +91,17 @@ void BurnPatternPage::doBurn() {
     m_status->setText(tr("Burning test pattern to disc…"));
     qApp->processEvents();
 
-    if (m_backend->burnTestPattern(device, outPath)) {
+    const BurnResult br = m_backend->burnTestPattern(device, outPath);
+    if (br.succeeded()) {
         m_status->setText(tr("Test pattern burned. Remove the disc and proceed."));
         m_done = true;
         emit completeChanged();
     } else {
-        m_status->setText(tr("Burn failed. Check that cdrecord is installed and "
-                             "the device path is correct."));
+        m_status->setText(tr("Burn failed: %1").arg(br.errorMessage));
+        QString detail = br.errorMessage;
+        if (!br.stderrText.isEmpty())
+            detail += "\n\nProcess output:\n" + br.stderrText.left(2000);
+        QMessageBox::critical(this, tr("Burn Failed"), detail);
     }
     m_progress->setVisible(false);
 }
@@ -220,6 +224,7 @@ ResultPage::ResultPage(ProfileDatabase* db, QWidget* parent)
     : QWizardPage(parent), m_db(db)
 {
     setTitle(tr("Calibration Complete"));
+    setSubTitle(tr("Click Finish to save this profile to your local library."));
     m_leName       = new QLineEdit(this);
     m_lblTr0       = new QLabel(this);
     m_lblDtr       = new QLabel(this);
@@ -241,9 +246,39 @@ void ResultPage::initializePage() {
     m_lblDtr->setText(QString::number(p.dtr, 'g', 10));
     m_lblR0->setText(QString::number(p.r0,  'f', 2));
     m_lblMediaType->setText(kMediaNames.value(p.mediaType, "Unknown"));
+}
 
-    connect(wizard(), &QWizard::accepted, this, [this, p = DiscProfile(p)]() mutable {
-        p.name = m_leName->text();
-        m_db->saveUserProfile(p);
-    }, Qt::UniqueConnection);
+bool ResultPage::validatePage() {
+    DiscProfile p = static_cast<CalibrationWizard*>(wizard())->calibratedProfile();
+    p.name = m_leName->text().trimmed();
+    if (p.name.isEmpty()) {
+        QMessageBox::warning(this, tr("Profile name required"),
+            tr("Please enter a name for this profile."));
+        return false;
+    }
+    // If ATIP didn't yield a discId, mint a stable synthetic one based on the
+    // profile name + media type so findById has something to match next time.
+    if (p.discId.isEmpty())
+        p.discId = QStringLiteral("user:%1:%2")
+                   .arg(static_cast<int>(p.mediaType))
+                   .arg(p.name);
+
+    QString err;
+    QObject::connect(m_db, &ProfileDatabase::saveFailed,
+                     this, [&err](const QString& m){ err = m; },
+                     Qt::DirectConnection);
+    const bool ok = m_db->saveUserProfile(p);
+    QObject::disconnect(m_db, &ProfileDatabase::saveFailed, this, nullptr);
+
+    if (!ok) {
+        QMessageBox::critical(this, tr("Save Failed"),
+            tr("Could not save profile.\n\n%1\n\nLocation: %2")
+                .arg(err.isEmpty() ? tr("Unknown error") : err,
+                     m_db->userProfilePath()));
+        return false;  // keep wizard open so user can retry / copy the error
+    }
+    static_cast<CalibrationWizard*>(wizard())->setResult(p);  // sync back the discId
+    QMessageBox::information(this, tr("Profile Saved"),
+        tr("Saved to %1").arg(m_db->userProfilePath()));
+    return true;
 }

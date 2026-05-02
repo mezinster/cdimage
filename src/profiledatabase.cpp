@@ -51,23 +51,47 @@ QList<DiscProfile> ProfileDatabase::allProfiles() const {
     return result;
 }
 
-void ProfileDatabase::saveUserProfile(const DiscProfile& profile) {
+bool ProfileDatabase::saveUserProfile(const DiscProfile& profile) {
+    const QList<DiscProfile> snapshot = m_user;
     m_user.removeIf([&](const DiscProfile& p){ return p.discId == profile.discId; });
     m_user.append(profile);
-    persist();
+    if (!persist()) {
+        m_user = snapshot;
+        return false;
+    }
+    return true;
 }
 
-void ProfileDatabase::removeUserProfile(const QString& discId) {
+bool ProfileDatabase::removeUserProfile(const QString& discId) {
+    const QList<DiscProfile> snapshot = m_user;
     m_user.removeIf([&](const DiscProfile& p){ return p.discId == discId; });
-    persist();
+    if (!persist()) {
+        m_user = snapshot;
+        return false;
+    }
+    return true;
 }
 
-void ProfileDatabase::persist() const {
-    QDir().mkpath(QFileInfo(m_userPath).absolutePath());
+bool ProfileDatabase::persist() {
+    const QString dir = QFileInfo(m_userPath).absolutePath();
+    if (!QDir().mkpath(dir)) {
+        emit saveFailed(QStringLiteral("Cannot create directory: %1").arg(dir));
+        return false;
+    }
     QFile f(m_userPath);
-    if (!f.open(QIODevice::WriteOnly)) return;
+    if (!f.open(QIODevice::WriteOnly)) {
+        emit saveFailed(QStringLiteral("Cannot open %1 for writing: %2")
+                        .arg(m_userPath, f.errorString()));
+        return false;
+    }
     QJsonArray arr;
     for (const auto& p : m_user)
         arr.append(toJson(p));
-    f.write(QJsonDocument(arr).toJson());
+    const QByteArray bytes = QJsonDocument(arr).toJson();
+    if (f.write(bytes) != bytes.size()) {
+        emit saveFailed(QStringLiteral("Short write to %1: %2")
+                        .arg(m_userPath, f.errorString()));
+        return false;
+    }
+    return true;
 }

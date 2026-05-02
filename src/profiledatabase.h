@@ -14,13 +14,20 @@ public:
 
     std::optional<DiscProfile> findById(const QString& discId) const;
     QList<DiscProfile>         allProfiles() const;
-    void                       saveUserProfile(const DiscProfile&);
-    void                       removeUserProfile(const QString& discId);
+    QList<DiscProfile>         userProfiles() const    { return m_user; }
+    QList<DiscProfile>         bundledProfiles() const { return m_bundled; }
+    QString                    userProfilePath() const { return m_userPath; }
+
+    bool                       saveUserProfile(const DiscProfile&);
+    bool                       removeUserProfile(const QString& discId);
+
+signals:
+    void saveFailed(QString errorMessage);
 
 private:
     void loadBundled();
     void loadUser();
-    void persist() const;
+    bool persist();
 
     QList<DiscProfile> m_bundled;
     QList<DiscProfile> m_user;

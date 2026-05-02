@@ -1,6 +1,6 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
   <qresource prefix="/profiles">
-    <file>profiles/default_profiles.json</file>
+    <file alias="default_profiles.json">profiles/default_profiles.json</file>
   </qresource>
 </RCC>

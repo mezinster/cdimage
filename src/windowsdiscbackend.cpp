@@ -105,16 +105,45 @@ RawDiscInfo WindowsDiscBackend::queryDisc(const QString& devicePath) {
     return info;
 }
 
-bool WindowsDiscBackend::burnTestPattern(const QString& devicePath,
-                                         const QString& trackFile) {
-    // devicePath is e.g. "\\.\D:" — extract drive letter for cdrecord
+BurnResult WindowsDiscBackend::burnTestPattern(const QString& devicePath,
+                                                const QString& trackFile) {
+    BurnResult r;
+    if (devicePath.size() < 5) {
+        r.errorMessage = QStringLiteral("Bad device path: %1").arg(devicePath);
+        return r;
+    }
     const QChar driveLetter = devicePath.at(4);
     QProcess proc;
+    proc.setProcessChannelMode(QProcess::MergedChannels);
     proc.start("cdrecord", {"-audio",
                             QString("dev=%1:").arg(driveLetter),
                             trackFile});
-    proc.waitForFinished(300000);
-    return proc.exitCode() == 0;
+    if (!proc.waitForStarted(5000)) {
+        r.errorMessage = QStringLiteral(
+            "Failed to start cdrecord: %1. cdrecord (cdrtools) is not installed "
+            "by default on Windows. Install it (e.g. via Cygwin/Cdrtools) and "
+            "add it to PATH, or burn the generated WAV with Nero/ImgBurn manually.")
+            .arg(proc.errorString());
+        return r;
+    }
+    r.started = true;
+    if (!proc.waitForFinished(600000)) {
+        proc.kill();
+        proc.waitForFinished(2000);
+        r.stderrText   = QString::fromLocal8Bit(proc.readAll());
+        r.errorMessage = QStringLiteral("cdrecord did not finish within 10 minutes.");
+        return r;
+    }
+    r.stderrText = QString::fromLocal8Bit(proc.readAll());
+    if (proc.exitStatus() != QProcess::NormalExit) {
+        r.errorMessage = QStringLiteral("cdrecord crashed.");
+        return r;
+    }
+    r.finished = true;
+    r.exitCode = proc.exitCode();
+    if (r.exitCode != 0)
+        r.errorMessage = QStringLiteral("cdrecord exited with code %1").arg(r.exitCode);
+    return r;
 }
 
 QVector<qint64> WindowsDiscBackend::measureSeekTimes(const QString& devicePath,

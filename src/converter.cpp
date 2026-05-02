@@ -22,6 +22,7 @@
 #include <math.h>
 
 #include "converter.h"
+#include <QtEndian>
 
 Converter::Converter(QObject *parent)
  : QObject(parent)
@@ -84,7 +85,9 @@ bool Converter::convert(const QImage img, const QString& filename)
 	unsigned char color = 0, cl = 0, c1 = 0 , c2 = 0 ;
 	QFile imageFile(filename);
 	imageFile.remove();
-	imageFile.open(QIODevice::WriteOnly);
+	if (!imageFile.open(QIODevice::WriteOnly)) return false;
+	m_audioBytesWritten = 0;
+	writeWavHeader(&imageFile, 0);  // placeholder; patched at end
 	while (c<(all-tr))
 	{
         if (m_canceled){
@@ -129,6 +132,26 @@ bool Converter::convert(const QImage img, const QString& filename)
 		
 		if ((++zs)>=17) zs=0;
 	}
+	// Flush any partial sector held in `buffer` so all audio bytes are on disk.
+	// The original convert loop only flushes whole 2352-byte sectors; the
+	// remainder (if any) is conceptually padding to a sector boundary but for
+	// a valid WAV we should declare exactly what we wrote — so flush it.
+	// Note: local `c` is the spiral accumulator (double); `this->c` is the
+	// buffer fill count (int class member).
+	if (this->c > 0) {
+		imageFile.write(buffer, this->c);
+		m_audioBytesWritten += this->c;
+		this->c = 0;
+	}
+	// Patch RIFF size and data size now that we know the audio length.
+	const quint32 dataBytes = static_cast<quint32>(m_audioBytesWritten);
+	const quint32 riffSize  = dataBytes + 36;  // 44-byte header minus the 8 bytes ('RIFF' + size)
+	imageFile.seek(4);
+	quint32 le = qToLittleEndian(riffSize);
+	imageFile.write(reinterpret_cast<const char*>(&le), 4);
+	imageFile.seek(40);
+	le = qToLittleEndian(dataBytes);
+	imageFile.write(reinterpret_cast<const char*>(&le), 4);
 	imageFile.close();
     return true;
 }
@@ -163,10 +186,11 @@ void Converter::bw (char b, QFile *file)
 	if (c>=2352)
 	{
 		if (file->write(buffer, 2352)==-1)
-		{ 
+		{
 			qCritical ("Converter: Cannot write data to file");
 			return;
 		}
+		m_audioBytesWritten += 2352;
 		c=0;
 	}
 }
@@ -174,4 +198,38 @@ void Converter::bw (char b, QFile *file)
 void Converter::cancelConverting()
 {
     m_canceled = true;
+}
+
+void Converter::writeWavHeader(QFile* file, quint32 dataBytes)
+{
+    const quint32 sampleRate  = 44100;
+    const quint16 channels    = 2;
+    const quint16 bitsSample  = 16;
+    const quint32 byteRate    = sampleRate * channels * (bitsSample / 8);
+    const quint16 blockAlign  = channels * (bitsSample / 8);
+    const quint32 fmtChunkLen = 16;
+    const quint32 riffSize    = dataBytes + 36;
+
+    auto put32 = [&](quint32 v) {
+        v = qToLittleEndian(v);
+        file->write(reinterpret_cast<const char*>(&v), 4);
+    };
+    auto put16 = [&](quint16 v) {
+        v = qToLittleEndian(v);
+        file->write(reinterpret_cast<const char*>(&v), 2);
+    };
+
+    file->write("RIFF", 4);
+    put32(riffSize);
+    file->write("WAVE", 4);
+    file->write("fmt ", 4);
+    put32(fmtChunkLen);
+    put16(1);             // PCM
+    put16(channels);
+    put32(sampleRate);
+    put32(byteRate);
+    put16(blockAlign);
+    put16(bitsSample);
+    file->write("data", 4);
+    put32(dataBytes);
 }

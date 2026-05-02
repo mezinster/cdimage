@@ -8,7 +8,9 @@
 class CreateTrackDialog: public QDialog, public Ui::CreateTrackDialog {
 Q_OBJECT
 public:
-    explicit CreateTrackDialog(ProfileDatabase* db, QWidget* parent = nullptr);
+    explicit CreateTrackDialog(ProfileDatabase* db,
+                               const DiscProfile& currentProfile = {},
+                               QWidget* parent = nullptr);
     DiscProfile selectedProfile() const;
 
 public slots:
@@ -16,7 +18,12 @@ public slots:
     void loadPreset(int index);
 
 private:
-    ProfileDatabase* m_db;
+    void populatePresets();
+    int  indexForProfile(const DiscProfile& p) const;
+
+    ProfileDatabase*    m_db;
+    QList<DiscProfile>  m_orderedProfiles;  // mirrors combo order: user first, then bundled
+    DiscProfile         m_currentProfile;
 };
 
 #endif

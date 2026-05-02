@@ -20,6 +20,9 @@
 int main ( int argc, char** argv )
 {
 	QApplication app ( argc, argv );
+	QCoreApplication::setOrganizationName("CDImage");
+	QCoreApplication::setOrganizationDomain("cdimage.local");
+	QCoreApplication::setApplicationName("CDImage");
 	MainWindow win;
 	win.show();
 	return app.exec();

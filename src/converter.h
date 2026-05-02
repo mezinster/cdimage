@@ -71,6 +71,9 @@ private:
     double progress;
     bool m_canceled;
 
+    void writeWavHeader(QFile* file, quint32 dataBytes);
+    qint64 m_audioBytesWritten = 0;
+
 	char intseq[24*28*D];
 	int nh;
 	int pinf;

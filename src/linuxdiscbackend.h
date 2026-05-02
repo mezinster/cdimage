@@ -7,7 +7,7 @@ class LinuxDiscBackend : public IDiscBackend {
 public:
     QStringList     availableDevices()                                        override;
     RawDiscInfo     queryDisc(const QString& devicePath)                      override;
-    bool            burnTestPattern(const QString& devicePath,
+    BurnResult      burnTestPattern(const QString& devicePath,
                                     const QString& trackFile)                 override;
     QVector<qint64> measureSeekTimes(const QString& devicePath,
                                      const QVector<qint64>& sectors)          override;
