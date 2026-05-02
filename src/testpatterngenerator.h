@@ -18,13 +18,17 @@ public:
 
     // Convert the gradient image to an audio track using the given profile geometry.
     // Returns the output path on success, empty string on failure.
+    // maxAudioBytes: cap the generated audio length (default 800 MiB, safe
+    // for 80-min CD-Rs). Pass the queried disc capacity for tight sizing.
     static QString generateTrack(const DiscProfile& profile,
-                                  const QString& outputPath);
+                                  const QString& outputPath,
+                                  qint64 maxAudioBytes = qint64(800) * 1024 * 1024);
 
     // Convert the rings image to an audio track. Preferred over generateTrack
     // when the disc will be analysed with PhotoCalibration::PatternType::Rings.
     static QString generateRingsTrack(const DiscProfile& profile,
-                                       const QString& outputPath);
+                                       const QString& outputPath,
+                                       qint64 maxAudioBytes = qint64(800) * 1024 * 1024);
 };
 
 #endif

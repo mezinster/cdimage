@@ -61,19 +61,21 @@ QImage TestPatternGenerator::generateRingsImage(int size) {
 }
 
 QString TestPatternGenerator::generateTrack(const DiscProfile& profile,
-                                             const QString& outputPath) {
+                                             const QString& outputPath,
+                                             qint64 maxAudioBytes) {
     const QImage img = generateGradientImage(3000);
     Converter conv(nullptr, profile);
-    if (conv.convert(img, outputPath))
+    if (conv.convert(img, outputPath, maxAudioBytes))
         return outputPath;
     return {};
 }
 
 QString TestPatternGenerator::generateRingsTrack(const DiscProfile& profile,
-                                                   const QString& outputPath) {
+                                                   const QString& outputPath,
+                                                   qint64 maxAudioBytes) {
     const QImage img = generateRingsImage(3000);
     Converter conv(nullptr, profile);
-    if (conv.convert(img, outputPath))
+    if (conv.convert(img, outputPath, maxAudioBytes))
         return outputPath;
     return {};
 }

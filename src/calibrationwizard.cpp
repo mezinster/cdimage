@@ -2,6 +2,7 @@
 #include "photocalibration.h"
 #include "drivereadbackcalibration.h"
 #include "testpatterngenerator.h"
+#include "capacitydialog.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -12,6 +13,22 @@
 #include <QApplication>
 #include <QDir>
 #include <QtConcurrent/QtConcurrent>
+
+// Returns audio bytes (sector-aligned) the caller should pass to Converter.
+// Asks the backend first; if that returns 0 (unknown), prompts the user via
+// CapacityDialog. Returns 0 if the user cancelled.
+static qint64 resolveAudioCapacityBytes(IDiscBackend* backend,
+                                         const QString& devicePath,
+                                         QWidget* dialogParent) {
+    DiscCapacity cap = backend->queryCapacity(devicePath);
+    if (cap.freeBytes > 0) {
+        // Round down to a sector boundary defensively.
+        return (cap.freeBytes / 2352) * 2352;
+    }
+    CapacityDialog dlg(dialogParent);
+    if (dlg.exec() != QDialog::Accepted) return 0;
+    return dlg.selectedBytes();
+}
 
 static const QMap<MediaType, QString> kMediaNames = {
     {MediaType::CD_R,   "CD-R"},   {MediaType::CD_RW,  "CD-RW"},
@@ -77,24 +94,34 @@ bool BurnPatternPage::isComplete() const { return m_done; }
 void BurnPatternPage::doBurn() {
     if (m_watcher) return;  // already running
 
+    const QString device = wizard()->property("devicePath").toString();
+    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
+
+    // Resolve disc capacity BEFORE the worker spins up — the dialog (if
+    // shown) needs the GUI thread.
+    const qint64 capacityBytes = resolveAudioCapacityBytes(m_backend, device, this);
+    if (capacityBytes <= 0) {
+        m_status->setText(tr("Cancelled."));
+        return;
+    }
+    qInfo() << "BurnPatternPage::doBurn dispatch device=" << device
+            << "wav=" << outPath << "capacityBytes=" << capacityBytes;
+
     m_burnBtn->setEnabled(false);
     m_progress->setVisible(true);
     m_status->setText(tr("Generating test track + burning (this may take several minutes)…"));
 
-    const QString device = wizard()->property("devicePath").toString();
-    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
     IDiscBackend* backend = m_backend;
-    qInfo() << "BurnPatternPage::doBurn dispatch device=" << device << "wav=" << outPath;
 
     // Heavy work runs on a thread-pool worker so the GUI thread stays
     // responsive (no DWM "Not Responding" hang) and any C-runtime fault
     // during WAV generation propagates as an SEH on the worker rather than
     // killing the GUI thread inline.
-    QFuture<BurnResult> fut = QtConcurrent::run([backend, device, outPath]() {
+    QFuture<BurnResult> fut = QtConcurrent::run([backend, device, outPath, capacityBytes]() {
         BurnResult r;
         DiscProfile defaultProfile;
-        qInfo() << "Worker: generating test pattern WAV";
-        if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath).isEmpty()) {
+        qInfo() << "Worker: generating test pattern WAV bytes=" << capacityBytes;
+        if (TestPatternGenerator::generateRingsTrack(defaultProfile, outPath, capacityBytes).isEmpty()) {
             r.errorMessage = QStringLiteral("Failed to generate test track WAV.");
             qWarning() << "Worker: WAV generation failed";
             return r;

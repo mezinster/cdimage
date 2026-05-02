@@ -23,6 +23,7 @@
 #include "converter.h"
 #include "createtrackdialog.h"
 #include "calibrationwizard.h"
+#include "capacitydialog.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -66,6 +67,14 @@ void MainWindow::createTrack() {
     if (!dial.exec()) return;
 
     const DiscProfile profile = dial.selectedProfile();
+
+    // Image-track creation doesn't know which drive will burn, so always
+    // ask the user for capacity (no auto-detect path here). The resulting
+    // WAV is sized to fit the chosen disc.
+    CapacityDialog capDlg(this);
+    if (capDlg.exec() != QDialog::Accepted) return;
+    const qint64 capacityBytes = capDlg.selectedBytes();
+
     Converter converter(this, profile);
 
     QProgressDialog progress(tr("Generating track…"), tr("Abort"), 0, 100, this);
@@ -73,7 +82,7 @@ void MainWindow::createTrack() {
     connect(&converter, &Converter::progressChanged, &progress, &QProgressDialog::setValue);
     connect(&progress,  &QProgressDialog::canceled,  &converter, &Converter::cancelConverting);
 
-    if (converter.convert(m_image, dial.leFileName->text()))
+    if (converter.convert(m_image, dial.leFileName->text(), capacityBytes))
         QMessageBox::information(this, tr("Success"),
             tr("Track created as a standard audio WAV file:<br><b>%1</b><br><br>"
                "Burn it as an <b>Audio CD</b> with any burning software "

@@ -17,6 +17,10 @@ public:
         return m_discInfo;
     }
 
+    DiscCapacity queryCapacity(const QString&) override {
+        return DiscCapacity{};  // tests don't exercise capacity-aware burns
+    }
+
     BurnResult burnTestPattern(const QString&, const QString&) override {
         return m_burnResult;
     }

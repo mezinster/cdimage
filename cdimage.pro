@@ -19,7 +19,8 @@ HEADERS += src/cdpreview.h \
            src/testpatterngenerator.h \
            src/photocalibration.h \
            src/drivereadbackcalibration.h \
-           src/calibrationwizard.h
+           src/calibrationwizard.h \
+           src/capacitydialog.h
 
 SOURCES += src/cdpreview.cpp \
            src/converter.cpp \
@@ -32,7 +33,8 @@ SOURCES += src/cdpreview.cpp \
            src/testpatterngenerator.cpp \
            src/photocalibration.cpp \
            src/drivereadbackcalibration.cpp \
-           src/calibrationwizard.cpp
+           src/calibrationwizard.cpp \
+           src/capacitydialog.cpp
 
 unix:HEADERS  += src/linuxdiscbackend.h
 unix:SOURCES  += src/linuxdiscbackend.cpp

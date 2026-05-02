@@ -111,6 +111,87 @@ RawDiscInfo WindowsDiscBackend::queryDisc(const QString& devicePath) {
     return info;
 }
 
+DiscCapacity WindowsDiscBackend::queryCapacity(const QString& devicePath) {
+    DiscCapacity cap;
+    qInfo() << "IMAPI queryCapacity device=" << devicePath;
+
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool comInited = SUCCEEDED(hr);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        qWarning() << "queryCapacity: CoInitializeEx failed hr=0x" << QString::number(hr, 16);
+        return cap;
+    }
+
+    IDiscMaster2*            master   = nullptr;
+    IDiscRecorder2*          recorder = nullptr;
+    IDiscFormat2TrackAtOnce* format   = nullptr;
+
+    auto cleanup = [&]() {
+        if (format)   format->Release();
+        if (recorder) recorder->Release();
+        if (master)   master->Release();
+        if (comInited) CoUninitialize();
+    };
+
+    hr = CoCreateInstance(CLSID_MsftDiscMaster2, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IDiscMaster2, reinterpret_cast<void**>(&master));
+    if (FAILED(hr)) { cleanup(); return cap; }
+
+    if (devicePath.size() < 5) { cleanup(); return cap; }
+    const QChar wantedLetter = devicePath.at(4).toUpper();
+
+    LONG recorderCount = 0;
+    master->get_Count(&recorderCount);
+    for (LONG i = 0; i < recorderCount && recorder == nullptr; ++i) {
+        BSTR uid = nullptr;
+        if (FAILED(master->get_Item(i, &uid))) continue;
+        IDiscRecorder2* tmp = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_MsftDiscRecorder2, nullptr,
+                CLSCTX_INPROC_SERVER, IID_IDiscRecorder2,
+                reinterpret_cast<void**>(&tmp))) &&
+            SUCCEEDED(tmp->InitializeDiscRecorder(uid))) {
+            SAFEARRAY* paths = nullptr;
+            if (SUCCEEDED(tmp->get_VolumePathNames(&paths)) && paths != nullptr) {
+                LONG lBound = 0, uBound = -1;
+                SafeArrayGetLBound(paths, 1, &lBound);
+                SafeArrayGetUBound(paths, 1, &uBound);
+                for (LONG j = lBound; j <= uBound && recorder == nullptr; ++j) {
+                    VARIANT v; VariantInit(&v);
+                    if (SUCCEEDED(SafeArrayGetElement(paths, &j, &v))) {
+                        if (v.vt == VT_BSTR && v.bstrVal && SysStringLen(v.bstrVal) > 0) {
+                            QChar volLetter = QChar(static_cast<ushort>(v.bstrVal[0])).toUpper();
+                            if (volLetter == wantedLetter) recorder = tmp;
+                        }
+                        VariantClear(&v);
+                    }
+                }
+                SafeArrayDestroy(paths);
+            }
+        }
+        SysFreeString(uid);
+        if (recorder == nullptr && tmp) tmp->Release();
+    }
+    if (!recorder) { cleanup(); return cap; }
+
+    if (FAILED(CoCreateInstance(CLSID_MsftDiscFormat2TrackAtOnce, nullptr,
+            CLSCTX_INPROC_SERVER, IID_IDiscFormat2TrackAtOnce,
+            reinterpret_cast<void**>(&format)))) {
+        cleanup(); return cap;
+    }
+    if (FAILED(format->put_Recorder(recorder))) { cleanup(); return cap; }
+
+    LONG freeSectors = 0, totalSectors = 0;
+    if (SUCCEEDED(format->get_FreeSectorsOnMedia(&freeSectors)))
+        cap.freeBytes  = static_cast<qint64>(freeSectors) * 2352;
+    if (SUCCEEDED(format->get_TotalSectorsOnMedia(&totalSectors)))
+        cap.totalBytes = static_cast<qint64>(totalSectors) * 2352;
+    qInfo() << "IMAPI queryCapacity free=" << cap.freeBytes
+            << "total=" << cap.totalBytes
+            << "(sectors free=" << freeSectors << "total=" << totalSectors << ")";
+    cleanup();
+    return cap;
+}
+
 BurnResult WindowsDiscBackend::burnTestPattern(const QString& devicePath,
                                                 const QString& trackFile) {
     BurnResult r = burnViaImapi(devicePath, trackFile);

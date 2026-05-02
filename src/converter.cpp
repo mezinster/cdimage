@@ -64,16 +64,17 @@ Converter::~Converter()
 }
 
 
-bool Converter::convert(const QImage img, const QString& filename)
+bool Converter::convert(const QImage img, const QString& filename, qint64 maxAudioBytes)
 {
 	qInfo() << "Converter::convert begin file=" << filename
 	        << "img=" << img.width() << "x" << img.height()
-	        << "tr0=" << m_tr0 << "dtr=" << m_dtr << "r0=" << m_r0;
+	        << "tr0=" << m_tr0 << "dtr=" << m_dtr << "r0=" << m_r0
+	        << "maxAudioBytes=" << maxAudioBytes;
 	const char pallete[]={'\x10','\x21','\x28','\xAA'};
 	double tr = m_tr0;
 	double r = m_r0;
 	double dr = m_dtr * m_r0 / m_tr0;
-	int all=800*1024*1024;
+	const qint64 all = maxAudioBytes;
     m_canceled = false;
 	double c=0;
 	int itr;

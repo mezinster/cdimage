@@ -10,6 +10,7 @@ class WindowsDiscBackend : public IDiscBackend {
 public:
     QStringList     availableDevices()                                        override;
     RawDiscInfo     queryDisc(const QString& devicePath)                      override;
+    DiscCapacity    queryCapacity(const QString& devicePath)                  override;
     BurnResult      burnTestPattern(const QString& devicePath,
                                     const QString& trackFile)                 override;
     QVector<qint64> measureSeekTimes(const QString& devicePath,
