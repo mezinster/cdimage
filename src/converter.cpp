@@ -150,15 +150,22 @@ bool Converter::convert(const QImage img, const QString& filename)
 		
 		if ((++zs)>=17) zs=0;
 	}
-	// Flush any partial sector held in `buffer` so all audio bytes are on disk.
-	// The original convert loop only flushes whole 2352-byte sectors; the
-	// remainder (if any) is conceptually padding to a sector boundary but for
-	// a valid WAV we should declare exactly what we wrote — so flush it.
+	// Flush + pad the partial sector to a 2352-byte CD audio sector boundary.
+	// IMAPI 2's IDiscFormat2TrackAtOnce::AddAudioTrack rejects audio streams
+	// whose length isn't a multiple of one audio sector, returning
+	// 0xC0AA050D (IMAPI2_E_AUDIO_TRACK_BROKEN_TRANSFER). The original
+	// cdrtools-based path tolerated unaligned data because cdrecord pads
+	// internally; native IMAPI does not. Pad with silence (zeros) — that
+	// region is past the disc data area anyway, so the audio waveform
+	// difference is invisible on the surface.
 	// Note: local `c` is the spiral accumulator (double); `this->c` is the
 	// buffer fill count (int class member).
 	if (this->c > 0) {
 		imageFile.write(buffer, this->c);
-		m_audioBytesWritten += this->c;
+		const int padBytes = 2352 - this->c;
+		static const char zeros[2352] = {0};
+		imageFile.write(zeros, padBytes);
+		m_audioBytesWritten += this->c + padBytes;
 		this->c = 0;
 	}
 	// Patch RIFF size and data size now that we know the audio length.
