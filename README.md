@@ -24,8 +24,8 @@ The Converter WAV-header tests each write ~800 MB and take a few minutes apiece.
 
 ## Windows Users
 Since many Windows users experienced problems with building it or did not want to install Qt and all the stuff, I've made a [Windows binary build](https://github.com/arduinocelentano/cdimage/releases).
-However I have not tested it thoroughly yet because I don't have a working CD recorder at hand right now.
-I think I'll try to burn some discs with Windows tools later and note down the steps for Windows users.
+
+On Windows, CDImage burns calibration test patterns natively using **IMAPI 2** (Image Mastering API v2), which is built into every Windows version since Vista — no additional software required. If you have `cdrecord` (cdrtools) installed and in your PATH, it will be used as a fallback should IMAPI initialisation fail, but it is no longer a prerequisite.
 
 ## Before you start
 If your compact disc is not mentioned in the track generating dialog, you'll probably fail. All the discs are slightly different geometrically. This difference does not matter for data storage but dramatically influences image calculation.

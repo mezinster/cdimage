@@ -3,6 +3,9 @@
 
 #include "idiscbackend.h"
 
+#include <imapi2.h>
+#include <imapi2error.h>
+
 class WindowsDiscBackend : public IDiscBackend {
 public:
     QStringList     availableDevices()                                        override;
@@ -18,6 +21,9 @@ private:
     RawDiscInfo readDiscInfo(void* handle);
     RawDiscInfo readAtip(void* handle);
     MediaType   mediaTypeFromDiscTypeByte(quint8 b);
+
+    BurnResult  burnViaImapi(const QString& devicePath, const QString& trackFile);
+    BurnResult  burnViaCdrecord(const QString& devicePath, const QString& trackFile);
 };
 
 #endif
