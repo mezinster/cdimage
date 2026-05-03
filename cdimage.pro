@@ -20,7 +20,8 @@ HEADERS += src/cdpreview.h \
            src/photocalibration.h \
            src/drivereadbackcalibration.h \
            src/calibrationwizard.h \
-           src/capacitydialog.h
+           src/capacitydialog.h \
+           src/i18n.h
 
 SOURCES += src/cdpreview.cpp \
            src/converter.cpp \
@@ -34,7 +35,15 @@ SOURCES += src/cdpreview.cpp \
            src/photocalibration.cpp \
            src/drivereadbackcalibration.cpp \
            src/calibrationwizard.cpp \
-           src/capacitydialog.cpp
+           src/capacitydialog.cpp \
+           src/i18n.cpp
+
+CONFIG       += lrelease embed_translations
+TRANSLATIONS += translations/cdimage_ru.ts \
+                translations/cdimage_de.ts \
+                translations/cdimage_es.ts \
+                translations/cdimage_fr.ts \
+                translations/cdimage_zh_CN.ts
 
 unix:HEADERS  += src/linuxdiscbackend.h
 unix:SOURCES  += src/linuxdiscbackend.cpp

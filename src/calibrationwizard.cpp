@@ -12,6 +12,7 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QDir>
+#include <QEvent>
 #include <QtConcurrent/QtConcurrent>
 
 // Returns audio bytes (sector-aligned) the caller should pass to Converter.
@@ -55,18 +56,28 @@ CalibrationWizard::CalibrationWizard(IDiscBackend* backend, ProfileDatabase* db,
 // ── WelcomePage ───────────────────────────────────────────────────────────────
 
 WelcomePage::WelcomePage(const RawDiscInfo& disc, QWidget* parent)
-    : QWizardPage(parent)
+    : QWizardPage(parent), m_disc(disc)
 {
+    m_lbl = new QLabel(this);
+    m_lbl->setWordWrap(true);
+    auto* layout = new QVBoxLayout(this);
+    layout->addWidget(m_lbl);
+    retranslateUi();
+}
+
+void WelcomePage::retranslateUi() {
     setTitle(tr("Disc Calibration"));
-    auto* lbl = new QLabel(tr(
+    m_lbl->setText(tr(
         "<p>Detected disc: <b>%1</b> (ID: %2)</p>"
         "<p>This wizard burns a test pattern onto the disc, then measures the disc "
         "geometry either from a photograph or by re-reading the disc with the drive.</p>")
-        .arg(kMediaNames.value(disc.mediaType, "Unknown"))
-        .arg(disc.discId.isEmpty() ? tr("unknown") : disc.discId), this);
-    lbl->setWordWrap(true);
-    auto* layout = new QVBoxLayout(this);
-    layout->addWidget(lbl);
+        .arg(kMediaNames.value(m_disc.mediaType, tr("Unknown")))
+        .arg(m_disc.discId.isEmpty() ? tr("unknown") : m_disc.discId));
+}
+
+void WelcomePage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 // ── BurnPatternPage ───────────────────────────────────────────────────────────
@@ -75,17 +86,52 @@ BurnPatternPage::BurnPatternPage(IDiscBackend* backend, const RawDiscInfo& disc,
                                   QWidget* parent)
     : QWizardPage(parent), m_backend(backend), m_disc(disc)
 {
-    setTitle(tr("Burn Test Pattern"));
-    m_status   = new QLabel(tr("Click 'Burn' to write the test pattern to the disc."), this);
+    m_status   = new QLabel(this);
     m_progress = new QProgressBar(this);
     m_progress->setRange(0, 0);
     m_progress->setVisible(false);
-    m_burnBtn = new QPushButton(tr("Burn Test Pattern"), this);
+
+    m_lePath = new QLineEdit(this);
+    m_lePath->setText(QDir::tempPath() + "/cdimage_testpattern.wav");
+    m_browseBtn = new QPushButton(this);
+    connect(m_browseBtn, &QPushButton::clicked, this, &BurnPatternPage::browseWavPath);
+
+    m_burnBtn = new QPushButton(this);
     connect(m_burnBtn, &QPushButton::clicked, this, &BurnPatternPage::doBurn);
+
+    m_pathLabel = new QLabel(this);
+    auto* pathRow = new QHBoxLayout;
+    pathRow->addWidget(m_pathLabel);
+    pathRow->addWidget(m_lePath);
+    pathRow->addWidget(m_browseBtn);
+
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(m_status);
+    layout->addLayout(pathRow);
     layout->addWidget(m_progress);
     layout->addWidget(m_burnBtn);
+
+    retranslateUi();
+}
+
+void BurnPatternPage::retranslateUi() {
+    setTitle(tr("Burn Test Pattern"));
+    m_status->setText(tr("Click 'Burn' to write the test pattern to the disc."));
+    m_pathLabel->setText(tr("Test WAV:"));
+    m_browseBtn->setText(tr("Browse…"));
+    m_burnBtn->setText(tr("Burn Test Pattern"));
+}
+
+void BurnPatternPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
+}
+
+void BurnPatternPage::browseWavPath() {
+    const QString f = QFileDialog::getSaveFileName(
+        this, tr("Save test pattern as"), m_lePath->text(),
+        tr("WAV audio (*.wav);;All files (*)"));
+    if (!f.isEmpty()) m_lePath->setText(f);
 }
 
 void BurnPatternPage::initializePage() { m_done = false; emit completeChanged(); }
@@ -95,7 +141,9 @@ void BurnPatternPage::doBurn() {
     if (m_watcher) return;  // already running
 
     const QString device = wizard()->property("devicePath").toString();
-    const QString outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
+    QString outPath = m_lePath->text().trimmed();
+    if (outPath.isEmpty())
+        outPath = QDir::tempPath() + "/cdimage_testpattern.wav";
 
     // Resolve disc capacity BEFORE the worker spins up — the dialog (if
     // shown) needs the GUI thread.
@@ -164,19 +212,39 @@ void BurnPatternPage::onBurnFinished() {
 // ── MethodSelectPage ──────────────────────────────────────────────────────────
 
 MethodSelectPage::MethodSelectPage(QWidget* parent) : QWizardPage(parent) {
-    setTitle(tr("Choose Measurement Method"));
-    m_rbPhoto    = new QRadioButton(tr("Photograph the disc"), this);
-    m_rbReadback = new QRadioButton(tr("Let the drive re-read the disc"), this);
+    m_rbPhoto    = new QRadioButton(this);
+    m_rbReadback = new QRadioButton(this);
     m_rbPhoto->setChecked(true);
     registerField("usePhoto", m_rbPhoto);
+
+    m_lblPhotoHint    = new QLabel(this);
+    m_lblReadbackHint = new QLabel(this);
+    m_lblPhotoHint->setWordWrap(true);
+    m_lblReadbackHint->setWordWrap(true);
+
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(m_rbPhoto);
-    layout->addWidget(new QLabel(tr("  Take a photo of the burned disc and upload it. "
-                                    "Works without a functional drive reader."), this));
+    layout->addWidget(m_lblPhotoHint);
     layout->addSpacing(8);
     layout->addWidget(m_rbReadback);
-    layout->addWidget(new QLabel(tr("  The drive seeks to known sectors and measures "
-                                    "timing. Fully automated."), this));
+    layout->addWidget(m_lblReadbackHint);
+
+    retranslateUi();
+}
+
+void MethodSelectPage::retranslateUi() {
+    setTitle(tr("Choose Measurement Method"));
+    m_rbPhoto->setText(tr("Photograph the disc"));
+    m_rbReadback->setText(tr("Let the drive re-read the disc"));
+    m_lblPhotoHint->setText(tr("  Take a photo of the burned disc and upload it. "
+                               "Works without a functional drive reader."));
+    m_lblReadbackHint->setText(tr("  The drive seeks to known sectors and measures "
+                                  "timing. Fully automated."));
+}
+
+void MethodSelectPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 int MethodSelectPage::nextId() const {
@@ -186,16 +254,13 @@ int MethodSelectPage::nextId() const {
 // ── PhotoPage ─────────────────────────────────────────────────────────────────
 
 PhotoPage::PhotoPage(QWidget* parent) : QWizardPage(parent) {
-    setTitle(tr("Upload Disc Photo"));
-    auto* lbl = new QLabel(tr("Place the burned disc on a dark background under even "
-                               "lighting. Take a photo showing the full disc, then "
-                               "select it below:"), this);
-    lbl->setWordWrap(true);
+    m_lblIntro = new QLabel(this);
+    m_lblIntro->setWordWrap(true);
     m_path = new QLineEdit(this);
     registerField("photoPath", m_path);
     connect(m_path, &QLineEdit::textChanged, this, &PhotoPage::completeChanged);
-    auto* btn = new QPushButton(tr("Browse…"), this);
-    connect(btn, &QPushButton::clicked, this, [this]{
+    m_browseBtn = new QPushButton(this);
+    connect(m_browseBtn, &QPushButton::clicked, this, [this]{
         const QString f = QFileDialog::getOpenFileName(
             this, tr("Select disc photo"), {},
             tr("Images (*.png *.jpg *.jpeg *.bmp)"));
@@ -203,10 +268,25 @@ PhotoPage::PhotoPage(QWidget* parent) : QWizardPage(parent) {
     });
     auto* row = new QHBoxLayout;
     row->addWidget(m_path);
-    row->addWidget(btn);
+    row->addWidget(m_browseBtn);
     auto* layout = new QVBoxLayout(this);
-    layout->addWidget(lbl);
+    layout->addWidget(m_lblIntro);
     layout->addLayout(row);
+
+    retranslateUi();
+}
+
+void PhotoPage::retranslateUi() {
+    setTitle(tr("Upload Disc Photo"));
+    m_lblIntro->setText(tr("Place the burned disc on a dark background under even "
+                           "lighting. Take a photo showing the full disc, then "
+                           "select it below:"));
+    m_browseBtn->setText(tr("Browse…"));
+}
+
+void PhotoPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 bool PhotoPage::isComplete() const { return !m_path->text().isEmpty(); }
@@ -214,11 +294,23 @@ bool PhotoPage::isComplete() const { return !m_path->text().isEmpty(); }
 // ── ReadbackPage ──────────────────────────────────────────────────────────────
 
 ReadbackPage::ReadbackPage(QWidget* parent) : QWizardPage(parent) {
-    setTitle(tr("Drive Read-Back"));
+    m_lbl = new QLabel(this);
+    m_lbl->setWordWrap(true);
     auto* layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(tr("Re-insert the burned disc. The drive will seek "
-                                    "to known sectors to measure timing automatically "
-                                    "on the next page."), this));
+    layout->addWidget(m_lbl);
+    retranslateUi();
+}
+
+void ReadbackPage::retranslateUi() {
+    setTitle(tr("Drive Read-Back"));
+    m_lbl->setText(tr("Re-insert the burned disc. The drive will seek "
+                      "to known sectors to measure timing automatically "
+                      "on the next page."));
+}
+
+void ReadbackPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 void ReadbackPage::initializePage() { emit completeChanged(); }
@@ -229,13 +321,22 @@ AnalysisPage::AnalysisPage(IDiscBackend* backend, const RawDiscInfo& disc,
                             QWidget* parent)
     : QWizardPage(parent), m_backend(backend), m_disc(disc)
 {
-    setTitle(tr("Analysing…"));
     m_progress = new QProgressBar(this);
     m_progress->setRange(0, 100);
     m_status = new QLabel(this);
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(m_status);
     layout->addWidget(m_progress);
+    retranslateUi();
+}
+
+void AnalysisPage::retranslateUi() {
+    setTitle(tr("Analysing…"));
+}
+
+void AnalysisPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 void AnalysisPage::initializePage() {
@@ -278,8 +379,6 @@ void AnalysisPage::initializePage() {
 ResultPage::ResultPage(ProfileDatabase* db, QWidget* parent)
     : QWizardPage(parent), m_db(db)
 {
-    setTitle(tr("Calibration Complete"));
-    setSubTitle(tr("Click Finish to save this profile to your local library."));
     m_leName       = new QLineEdit(this);
     m_lblTr0       = new QLabel(this);
     m_lblDtr       = new QLabel(this);
@@ -287,12 +386,34 @@ ResultPage::ResultPage(ProfileDatabase* db, QWidget* parent)
     m_lblMediaType = new QLabel(this);
     registerField("profileName*", m_leName);
 
-    auto* form = new QFormLayout(this);
-    form->addRow(tr("Profile name:"), m_leName);
-    form->addRow(tr("tr0:"),          m_lblTr0);
-    form->addRow(tr("dtr:"),          m_lblDtr);
-    form->addRow(tr("r0 (mm):"),      m_lblR0);
-    form->addRow(tr("Media type:"),   m_lblMediaType);
+    m_form = new QFormLayout(this);
+    m_form->addRow(QString(), m_leName);        // labels filled in by retranslateUi
+    m_form->addRow(QString(), m_lblTr0);
+    m_form->addRow(QString(), m_lblDtr);
+    m_form->addRow(QString(), m_lblR0);
+    m_form->addRow(QString(), m_lblMediaType);
+
+    retranslateUi();
+}
+
+void ResultPage::retranslateUi() {
+    setTitle(tr("Calibration Complete"));
+    setSubTitle(tr("Click Finish to save this profile to your local library."));
+    if (auto* l = qobject_cast<QLabel*>(m_form->labelForField(m_leName)))       l->setText(tr("Profile name:"));
+    if (auto* l = qobject_cast<QLabel*>(m_form->labelForField(m_lblTr0)))       l->setText(tr("tr0:"));
+    if (auto* l = qobject_cast<QLabel*>(m_form->labelForField(m_lblDtr)))       l->setText(tr("dtr:"));
+    if (auto* l = qobject_cast<QLabel*>(m_form->labelForField(m_lblR0)))        l->setText(tr("r0 (mm):"));
+    if (auto* l = qobject_cast<QLabel*>(m_form->labelForField(m_lblMediaType))) l->setText(tr("Media type:"));
+    // Refresh "Unknown" media-type label if currently displayed.
+    if (m_lblMediaType->text() == QStringLiteral("Unknown")
+        || m_lblMediaType->text().isEmpty()) {
+        // initializePage() will repopulate from the wizard result; no-op here.
+    }
+}
+
+void ResultPage::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) retranslateUi();
+    QWizardPage::changeEvent(e);
 }
 
 void ResultPage::initializePage() {
@@ -300,7 +421,7 @@ void ResultPage::initializePage() {
     m_lblTr0->setText(QString::number(p.tr0, 'g', 10));
     m_lblDtr->setText(QString::number(p.dtr, 'g', 10));
     m_lblR0->setText(QString::number(p.r0,  'f', 2));
-    m_lblMediaType->setText(kMediaNames.value(p.mediaType, "Unknown"));
+    m_lblMediaType->setText(kMediaNames.value(p.mediaType, tr("Unknown")));
 }
 
 bool ResultPage::validatePage() {

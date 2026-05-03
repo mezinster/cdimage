@@ -27,6 +27,10 @@ moc_predefs.h
 qrc_*.cpp
 ui_*.h
 
+# Qt translations: lrelease output + qmake-generated embed_translations qrc
+.qm/
+qmake_qmake_qm_files.qrc
+
 # qmake target wrappers and per-config dirs
 target_wrapper.sh
 debug/

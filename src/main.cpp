@@ -15,6 +15,7 @@
 //main
 
 #include "mainwindow.h"
+#include "i18n.h"
 #include <QApplication>
 #include <QStandardPaths>
 #include <QDir>
@@ -89,6 +90,8 @@ int main ( int argc, char** argv )
 #ifdef Q_OS_WIN
 	SetUnhandledExceptionFilter(cdimageUnhandledFilter);
 #endif
+
+	I18n::installInitial();
 
 	MainWindow win;
 	win.show();

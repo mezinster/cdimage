@@ -49,7 +49,22 @@ The `delays[]` array in `converter.h` encodes CIRC (Cross-Interleaved Reed-Solom
 
 **`CreateTrackDialog`** (`src/createtrackdialog.h/.cpp`) — track-output dialog. Pre-selects the current disc profile if one was passed in, labels combo entries `[Local]`/`[Bundled]`. `discId` is the authoritative match key; `name` is fallback only when `discId` is empty.
 
-**`MainWindow`** (`src/mainwindow.h/.cpp`) — top-level window. Owns `m_currentProfile` (the most recently detected/calibrated profile); passes it to `CreateTrackDialog` for pre-selection.
+**`MainWindow`** (`src/mainwindow.h/.cpp`) — top-level window. Owns `m_currentProfile` (the most recently detected/calibrated profile); passes it to `CreateTrackDialog` for pre-selection. Hosts the **Language** menu (radio actions, one per locale) that calls `I18n::switchTo`.
+
+**`I18n`** (`src/i18n.h/.cpp`) — translator manager for live language switching. `installInitial()` (called from `main`) reads the persisted choice from `QSettings("ui/locale")`, falls back to `QLocale::system().name()`, and installs `cdimage_<locale>.qm` (embedded at `:/i18n/` by qmake's `embed_translations`) plus Qt's own `qtbase_<locale>.qm` from `QLibraryInfo::TranslationsPath`. `switchTo(code)` swaps both translators, persists the choice, and Qt posts `QEvent::LanguageChange` to every widget. Every imperatively-built widget (calibration wizard pages, `CapacityDialog`, `MainWindow`'s dynamic action) overrides `changeEvent()` to call its `retranslateUi()`; `.ui`-derived widgets call the moc-generated `Ui::*::retranslateUi(this)`.
+
+## i18n workflow
+
+`.ts` files live in `translations/`. After adding or changing any `tr(...)` string:
+
+```bash
+lupdate cdimage.pro      # refreshes the .ts files (preserve existing translations)
+linguist translations/cdimage_<locale>.ts   # translate
+```
+
+`lrelease` runs automatically as part of `make` (via `CONFIG += lrelease embed_translations`) and bundles the resulting `.qm` files into the binary as Qt resources at `:/i18n/`. Adding a new locale requires three things: a new `cdimage_<code>.ts` in `translations/`, a `TRANSLATIONS +=` line in `cdimage.pro`, and an entry in `shippedLocales()` + `displayName()` in `src/i18n.cpp`.
+
+Every wizard page or dialog that builds its UI imperatively (no `.ui` file) **must**: declare `Q_OBJECT`, hold member pointers to its labels/buttons, factor a `retranslateUi()` method, and override `changeEvent()` to call it on `QEvent::LanguageChange`. Without `Q_OBJECT`, `tr()` resolves under the parent class's translation context and translations silently won't match.
 
 ## Domain Notes
 

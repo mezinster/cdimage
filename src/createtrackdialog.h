@@ -17,6 +17,9 @@ public slots:
     void selectFile();
     void loadPreset(int index);
 
+protected:
+    void changeEvent(QEvent* e) override;
+
 private:
     void populatePresets();
     int  indexForProfile(const DiscProfile& p) const;

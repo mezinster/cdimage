@@ -1,5 +1,6 @@
 #include "createtrackdialog.h"
 #include <QFileDialog>
+#include <QEvent>
 
 CreateTrackDialog::CreateTrackDialog(ProfileDatabase* db,
                                       const DiscProfile& currentProfile,
@@ -31,11 +32,11 @@ void CreateTrackDialog::populatePresets() {
     const QList<DiscProfile> bundledP = m_db->bundledProfiles();
 
     for (const DiscProfile& p : userP) {
-        cbPresets->addItem(QStringLiteral("[Local] %1").arg(p.name));
+        cbPresets->addItem(tr("[Local] %1").arg(p.name));
         m_orderedProfiles.append(p);
     }
     for (const DiscProfile& p : bundledP) {
-        cbPresets->addItem(QStringLiteral("[Bundled] %1").arg(p.name));
+        cbPresets->addItem(tr("[Bundled] %1").arg(p.name));
         m_orderedProfiles.append(p);
     }
 }
@@ -65,6 +66,18 @@ void CreateTrackDialog::loadPreset(int index) {
     leTr0->setText(QString::number(p.tr0, 'g', 10));
     leDtr->setText(QString::number(p.dtr, 'g', 10));
     leR0->setText(QString::number(p.r0,  'f', 2));
+}
+
+void CreateTrackDialog::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        retranslateUi(this);
+        // Combo entries are built imperatively with [Local]/[Bundled] tags —
+        // rebuild so the bracketed labels follow the current language too.
+        const int idx = cbPresets->currentIndex();
+        populatePresets();
+        if (idx >= 0 && idx < cbPresets->count()) cbPresets->setCurrentIndex(idx);
+    }
+    QDialog::changeEvent(e);
 }
 
 DiscProfile CreateTrackDialog::selectedProfile() const {

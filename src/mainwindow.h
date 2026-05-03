@@ -24,6 +24,8 @@
 #include "discdetector.h"
 #include "profiledatabase.h"
 #include <QScopedPointer>
+#include <QActionGroup>
+#include <QMenu>
 
 class MainWindow: public QMainWindow, public Ui::MainWindow {
 Q_OBJECT
@@ -36,12 +38,18 @@ public slots:
     void about();
     void detectDisc();
 
+protected:
+    void changeEvent(QEvent* e) override;
+
 private slots:
     void onProfileFound(DiscProfile profile);
     void onProfileNotFound(RawDiscInfo info);
     void onDetectionFailed(QString error);
 
 private:
+    void buildLanguageMenu();
+    void retranslateDynamic();   // strings added imperatively, not via .ui
+
     CDPreview                          centralView;
     QImage                             m_image;
     QString                            m_path;
@@ -50,6 +58,10 @@ private:
     QScopedPointer<IDiscBackend>       m_backend;
     QScopedPointer<ProfileDatabase>    m_profileDb;
     QScopedPointer<DiscDetector>       m_detector;
+
+    QAction*       m_actionDetect    = nullptr;
+    QMenu*         m_menuLanguage    = nullptr;
+    QActionGroup*  m_languageGroup   = nullptr;
 };
 
 #endif

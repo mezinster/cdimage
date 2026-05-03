@@ -18,12 +18,14 @@
 #include <QProgressDialog>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QEvent>
 
 #include "mainwindow.h"
 #include "converter.h"
 #include "createtrackdialog.h"
 #include "calibrationwizard.h"
 #include "capacitydialog.h"
+#include "i18n.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -40,9 +42,12 @@ MainWindow::MainWindow(QWidget* parent)
     connect(actionCreate_track, &QAction::triggered, this, &MainWindow::createTrack);
     connect(actionAbout,        &QAction::triggered, this, &MainWindow::about);
 
-    QAction* actionDetect = new QAction(tr("Detect disc geometry"), this);
-    menuEdit->addAction(actionDetect);
-    connect(actionDetect, &QAction::triggered, this, &MainWindow::detectDisc);
+    m_actionDetect = new QAction(this);
+    menuEdit->addAction(m_actionDetect);
+    connect(m_actionDetect, &QAction::triggered, this, &MainWindow::detectDisc);
+
+    buildLanguageMenu();
+    retranslateDynamic();
 
     connect(m_detector.data(), &DiscDetector::profileFound,
             this, &MainWindow::onProfileFound);
@@ -50,6 +55,37 @@ MainWindow::MainWindow(QWidget* parent)
             this, &MainWindow::onProfileNotFound);
     connect(m_detector.data(), &DiscDetector::detectionFailed,
             this, &MainWindow::onDetectionFailed);
+}
+
+void MainWindow::buildLanguageMenu() {
+    m_menuLanguage = menubar->addMenu(QString());   // title set in retranslateDynamic
+    m_languageGroup = new QActionGroup(this);
+    m_languageGroup->setExclusive(true);
+
+    const QString active = I18n::currentLocale();
+    for (const QString& code : I18n::availableLocales()) {
+        QAction* a = m_menuLanguage->addAction(I18n::displayName(code));
+        a->setCheckable(true);
+        a->setData(code);
+        if (code == active) a->setChecked(true);
+        m_languageGroup->addAction(a);
+        connect(a, &QAction::triggered, this, [code]() {
+            I18n::switchTo(code);
+        });
+    }
+}
+
+void MainWindow::retranslateDynamic() {
+    if (m_actionDetect) m_actionDetect->setText(tr("Detect disc geometry"));
+    if (m_menuLanguage) m_menuLanguage->setTitle(tr("&Language"));
+}
+
+void MainWindow::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        retranslateUi(this);          // .ui-derived strings
+        retranslateDynamic();         // hand-built strings
+    }
+    QMainWindow::changeEvent(e);
 }
 
 void MainWindow::loadImage() {

@@ -2,6 +2,7 @@
 #define CAPACITYDIALOG_H
 
 #include <QDialog>
+#include <QLabel>
 #include <QRadioButton>
 #include <QSpinBox>
 
@@ -21,7 +22,13 @@ public:
     static constexpr qint64 kBytes80min = qint64(360000) * 2352;  // 847,440,000
     static constexpr qint64 kBytes90min = qint64(405000) * 2352;  // 952,560,000
 
+protected:
+    void changeEvent(QEvent* e) override;
+
 private:
+    void retranslateUi();
+
+    QLabel*       m_lblIntro;
     QRadioButton* m_rb74;
     QRadioButton* m_rb80;
     QRadioButton* m_rb90;
