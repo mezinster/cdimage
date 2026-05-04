@@ -18,17 +18,41 @@
 // Returns audio bytes (sector-aligned) the caller should pass to Converter.
 // Asks the backend first; if that returns 0 (unknown), prompts the user via
 // CapacityDialog. Returns 0 if the user cancelled.
+//
+// In both paths a fixed safety margin (CapacityDialog::kSafetyMarginSectors)
+// is subtracted before the value is returned. Reason: IMAPI's
+// get_FreeSectorsOnMedia and the user-picked 74/80/90-minute presets both
+// report the disc's *spec* capacity, but real recorders enforce a slightly
+// stricter limit (lead-out reserve, gaps, writer firmware variance).
+// Filling the disc to the spec edge produces 0xC0AA050D
+// (IMAPI2_E_AUDIO_TRACK_BROKEN_TRANSFER) on stricter drives even when the
+// audio data is sector-aligned.
 static qint64 resolveAudioCapacityBytes(IDiscBackend* backend,
                                          const QString& devicePath,
                                          QWidget* dialogParent) {
     DiscCapacity cap = backend->queryCapacity(devicePath);
     if (cap.freeBytes > 0) {
-        // Round down to a sector boundary defensively.
-        return (cap.freeBytes / 2352) * 2352;
+        const qint64 rawSectors  = cap.freeBytes / 2352;
+        const qint64 safeSectors = std::max<qint64>(
+            0, rawSectors - CapacityDialog::kSafetyMarginSectors);
+        qInfo() << "Capacity: IMAPI freeBytes=" << cap.freeBytes
+                << "(" << rawSectors << "sectors,"
+                << cap.freeBytes / (1024 * 1024) << "MiB) — using"
+                << safeSectors << "sectors after"
+                << CapacityDialog::kSafetyMarginSectors
+                << "-sector safety margin";
+        return safeSectors * 2352;
     }
+    qInfo() << "Capacity: backend returned 0 free bytes — prompting user";
     CapacityDialog dlg(dialogParent);
-    if (dlg.exec() != QDialog::Accepted) return 0;
-    return dlg.selectedBytes();
+    if (dlg.exec() != QDialog::Accepted) {
+        qInfo() << "Capacity: user cancelled CapacityDialog";
+        return 0;
+    }
+    const qint64 picked = dlg.selectedBytes();   // already margin-adjusted
+    qInfo() << "Capacity: user-selected (margin-adjusted)=" << picked
+            << "bytes (" << picked / 2352 << "sectors)";
+    return picked;
 }
 
 static const QMap<MediaType, QString> kMediaNames = {

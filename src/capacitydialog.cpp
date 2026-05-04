@@ -73,6 +73,8 @@ qint64 CapacityDialog::selectedBytes() const {
     if (m_rb80->isChecked()) return kBytes80min;
     if (m_rb90->isChecked()) return kBytes90min;
     // Custom: minutes -> sectors -> bytes. Sectors per minute = 60*75 = 4500.
-    const qint64 sectors = qint64(m_customMin->value()) * 4500;
-    return sectors * 2352;
+    // Apply the same safety margin as the presets so a custom 80-min entry
+    // matches the 80-min radio button.
+    const qint64 sectors = qint64(m_customMin->value()) * 4500 - kSafetyMarginSectors;
+    return std::max<qint64>(0, sectors) * 2352;
 }

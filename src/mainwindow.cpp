@@ -106,10 +106,15 @@ void MainWindow::createTrack() {
 
     // Image-track creation doesn't know which drive will burn, so always
     // ask the user for capacity (no auto-detect path here). The resulting
-    // WAV is sized to fit the chosen disc.
+    // WAV is sized to fit the chosen disc. CapacityDialog::selectedBytes
+    // already subtracts the safety margin so we don't fill the disc to the
+    // spec edge.
     CapacityDialog capDlg(this);
     if (capDlg.exec() != QDialog::Accepted) return;
     const qint64 capacityBytes = capDlg.selectedBytes();
+    qInfo() << "createTrack: user-selected capacity (margin-adjusted)="
+            << capacityBytes << "bytes (" << capacityBytes / 2352
+            << "sectors)";
 
     Converter converter(this, profile);
 
